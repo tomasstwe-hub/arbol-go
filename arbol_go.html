@@ -359,7 +359,9 @@ function vArboles(){
         </div>
       </div>
       <div class="trow">
-        <button class="btn sm" onclick="regar(${t.id})">💧 REGAR</button>
+        ${st.ratio>=0.7
+          ? `<button class="btn sm" onclick="regar(${t.id})">💧 REGAR</button>`
+          : `<button class="btn sm" disabled>💧 ${esperaRiego(t)}</button>`}
         <button class="btn sm pink" onclick="checkin(${t.id})">📸 CHECK-IN</button>
         <button class="btn sm ghost" onclick="toggleDetail(${t.id})">📊 STATS</button>
         <button class="btn sm ghost" onclick="placaQR(${t.id})">🏷️ QR</button>
@@ -377,18 +379,19 @@ function vArboles(){
 }
 function toggleDetail(id){ const d=$('#det'+id); d.style.display = d.style.display==='none'?'block':'none'; }
 
+function esperaRiego(t){
+  const st = statusOf(t);
+  const faltan = st.need*0.7 - (Date.now()-lastRiego(t))/DAY; // días hasta abrir ventana
+  return faltan<1 ? 'EN '+Math.max(1,Math.ceil(faltan*24))+' H' : 'EN '+Math.ceil(faltan)+' DÍAS';
+}
 function regar(id){
   const t = S.trees.find(x=>x.id===id);
   const st = statusOf(t);
+  if(st.ratio<0.7){ toast(`💧 Aún no toca — riega ${esperaRiego(t).toLowerCase()}. ¡No lo ahogues! 😅`); return; }
   t.riegos.push({f:Date.now()});
-  if(st.ratio>=.7){
-    S.player.racha=(S.player.racha||0)+1;
-    addXP(XP_RIEGO, HJ_RIEGO);
-    toast(`💧 +${XP_RIEGO} XP +${HJ_RIEGO}🍃 · Racha x${S.player.racha} 🔥`);
-  } else {
-    addXP(XP_RIEGO_EARLY,0);
-    toast(`💧 Muy pronto, pero +${XP_RIEGO_EARLY} XP. No lo ahogues 😅`);
-  }
+  S.player.racha=(S.player.racha||0)+1;
+  addXP(XP_RIEGO, HJ_RIEGO);
+  toast(`💧 +${XP_RIEGO} XP +${HJ_RIEGO}🍃 · Racha x${S.player.racha} 🔥`);
   save(); render();
 }
 
