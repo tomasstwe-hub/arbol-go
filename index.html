@@ -397,6 +397,7 @@ function regar(id){
 
 function checkin(id){
   const t = S.trees.find(x=>x.id===id);
+  if(t.chk===dayStr()){ toast('📸 Ya monitoreaste este árbol hoy. ¡Vuelve mañana!'); return; }
   openModal(`<h2 class="sec">📸 CHECK-IN: <span>${esc(t.nombre)}</span></h2>
     <label>¿Cómo está el árbol?</label>
     <select id="cond"><option>💪 Sano y creciendo</option><option>😰 Estresado (hojas caídas)</option><option>🤕 Dañado (vandalismo/plaga)</option></select>
@@ -407,6 +408,7 @@ function checkin(id){
 function doCheckin(id){
   const t = S.trees.find(x=>x.id===id);
   t.condicion = $('#cond').value;
+  t.chk = dayStr();
   const f = $('#ft').files[0];
   const fin = ()=>{ addXP(XP_CHECKIN,5); save(); closeModal(); toast(`📸 +${XP_CHECKIN} XP · Monitoreo registrado`); render(); };
   if(f){
@@ -473,7 +475,7 @@ function doPlant(){
   addXP(XP_PLANT+(nuevoTotem?25:0), HJ_PLANT+(nuevoTotem?15:0));
   plantLoc=null;
   save();
-  toast(`🌱 +${XP_PLANT+(nuevoTotem?25:0)} XP +${HJ_PLANT+(nuevoTotem?15:0)}🍃 · ¡${esc(nom)} está en el mapa!`);
+  toast(`🌱 +${XP_PLANT+(nuevoTotem?25:0)} XP +${HJ_PLANT+(nuevoTotem?15:0)}🍃 · ¡${nom} está en el mapa!`);
   const sp=plantSp;
   TAB='arboles'; render();
   if(nuevoTotem) setTimeout(()=>{ toast(`${SPECIES[sp].totem.e} ¡NUEVO TÓTEM: ${SPECIES[sp].totem.n.toUpperCase()}!`); totemCard(sp); }, 900);
@@ -739,7 +741,11 @@ function exportar(){
 }
 function importar(inp){
   const r=new FileReader();
-  r.onload=e=>{ try{ S=JSON.parse(e.target.result); save(); toast('📂 Registro importado'); render(); }catch(x){ toast('⚠️ Archivo inválido'); } };
+  r.onload=e=>{ try{
+    S=JSON.parse(e.target.result);
+    if(S.player){ initGear(S.player); S.trees.forEach(t=>{ if(!S.player.totems.includes(t.especie)) S.player.totems.push(t.especie); }); }
+    save(); toast('📂 Registro importado'); render();
+  }catch(x){ toast('⚠️ Archivo inválido'); } };
   r.readAsText(inp.files[0]);
 }
 
