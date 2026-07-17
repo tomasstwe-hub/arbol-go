@@ -6,6 +6,7 @@
 <title>ÁRBOL GO · Street Forest</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
 <style>
 :root{
   --bg:#0d0f12; --panel:#171a20; --panel2:#1f242c; --line:#2b323d;
@@ -137,6 +138,7 @@ document.getElementById('nojs').remove();
 /* ================= DATOS ================= */
 const OBREGON = [27.4828, -109.9304];
 const DAY = 86400000;
+const PUB = 'https://tomasstwe-hub.github.io/arbol-go/';
 
 const SPECIES = {
   mezquite:  {nombre:'Mezquite',   emoji:'🌳', sci:'Prosopis velutina',      base:true,  riego:4, co2:18, canopy:40, desc:'El rey del desierto. Sombra, vainas y raíces profundas.',
@@ -360,6 +362,7 @@ function vArboles(){
         <button class="btn sm" onclick="regar(${t.id})">💧 REGAR</button>
         <button class="btn sm pink" onclick="checkin(${t.id})">📸 CHECK-IN</button>
         <button class="btn sm ghost" onclick="toggleDetail(${t.id})">📊 STATS</button>
+        <button class="btn sm ghost" onclick="placaQR(${t.id})">🏷️ QR</button>
       </div>
       <div class="detail" id="det${t.id}" style="display:none">
         ☀️ Horas de luz: <b>${cl.luz.toLocaleString()} h</b> &nbsp; 🥵 Horas de calor (+35°C): <b>${cl.calor.toLocaleString()} h</b> &nbsp; 🥶 Horas frío (-7°C): <b>${cl.frio} h</b><br>
@@ -501,6 +504,92 @@ function usarTotem(k){
   save(); closeModal();
   toast(`${SPECIES[k].totem.e} ¡Ahora tu espíritu es ${SPECIES[k].totem.n}!`);
   render();
+}
+
+/* ================= PLACA QR ================= */
+function qrPayload(t){
+  const d={n:t.nombre,e:t.especie,f:t.fecha,la:+t.lat.toFixed(5),lo:+t.lng.toFixed(5),p:S.player.name,av:S.player.avatar};
+  return PUB+'#a='+btoa(unescape(encodeURIComponent(JSON.stringify(d))));
+}
+function drawPlaca(t){
+  const sp=SPECIES[t.especie], url=qrPayload(t);
+  const c=document.createElement('canvas'); c.width=640; c.height=960;
+  const x=c.getContext('2d');
+  x.fillStyle='#ffffff'; x.fillRect(0,0,640,960);
+  x.strokeStyle='#2fbf28'; x.lineWidth=12; x.strokeRect(14,14,612,932);
+  x.strokeStyle='#ff2e88'; x.lineWidth=3; x.strokeRect(30,30,580,900);
+  x.textAlign='center';
+  x.fillStyle='#111'; x.font='italic 900 46px Arial';
+  const w1=x.measureText('ÁRBOL ').width, w2=x.measureText('GO').width, x0=320-(w1+w2)/2;
+  x.textAlign='left';
+  x.fillStyle='#1f8f1a'; x.fillText('ÁRBOL ',x0,88);
+  x.fillStyle='#ff2e88'; x.fillText('GO',x0+w1,88);
+  x.textAlign='center';
+  x.fillStyle='#888'; x.font='700 17px Arial';
+  x.fillText('S T R E E T   F O R E S T   ·   C D .   O B R E G Ó N',320,116);
+  x.font='90px Arial'; x.fillText(sp.emoji,320,215);
+  let fs=34; x.font=`900 ${fs}px Arial`;
+  while(x.measureText(t.nombre).width>560 && fs>18){ fs-=2; x.font=`900 ${fs}px Arial`; }
+  x.fillStyle='#111'; x.fillText(t.nombre,320,268);
+  x.fillStyle='#666'; x.font='italic 20px Arial';
+  x.fillText(sp.nombre+' · '+sp.sci,320,300);
+  x.fillStyle='#111'; x.font='700 22px Arial';
+  x.fillText(`Plantado por ${S.player.avatar} ${S.player.name}`,320,345);
+  x.fillStyle='#666'; x.font='18px Arial';
+  x.fillText('el '+new Date(t.fecha).toLocaleDateString('es-MX',{day:'numeric',month:'long',year:'numeric'}),320,373);
+  const q=new QRious({value:url,size:340,level:'M'});
+  x.fillStyle='#f2f2f2'; x.fillRect(134,396,372,372);
+  x.drawImage(q.canvas,150,412,340,340);
+  x.fillStyle='#111'; x.font='900 28px Arial';
+  x.fillText('📱 ESCANÉAME',320,812);
+  x.fillStyle='#444'; x.font='19px Arial';
+  x.fillText('y conoce mi historia: mi edad, mi CO₂ y quién me cuida',320,842);
+  x.fillStyle='#1f8f1a'; x.font='700 19px Arial';
+  x.fillText('🌳 Cada árbol cuenta · Planta el tuyo',320,890);
+  x.fillStyle='#999'; x.font='14px Arial';
+  x.fillText(PUB.replace('https://',''),320,920);
+  return c;
+}
+function placaQR(id){
+  const t=S.trees.find(x=>x.id===id);
+  if(typeof QRious==='undefined'){ toast('🛜 Necesitas internet para generar el QR'); return; }
+  const c=drawPlaca(t);
+  openModal(`<h2 class="sec">🏷️ PLACA <span>QR</span> DE ${esc(t.nombre).toUpperCase()}</h2>
+    <p style="font-size:13px;margin:8px 0">Descárgala, <b>imprímela y enmícala</b> (o en bolsita ziploc) y amárrala a tu árbol. Quien la escanee verá su historia viva: edad, CO₂ y quién lo cuida 🌳</p>
+    <img src="${c.toDataURL('image/png')}" style="width:100%;border-radius:10px">
+    <br><br><button class="btn full" onclick="descargarPlaca(${id})">💾 DESCARGAR PLACA</button>`);
+}
+function descargarPlaca(id){
+  const t=S.trees.find(x=>x.id===id);
+  const a=document.createElement('a');
+  a.href=drawPlaca(t).toDataURL('image/png');
+  a.download='placa_'+t.nombre.replace(/[^a-zA-Z0-9áéíóúñÁÉÍÓÚÑ ]/g,'').replace(/ /g,'_')+'.png';
+  a.click();
+  toast('💾 Placa descargada. ¡A enmicar y colgar!');
+}
+function visitorHash(){
+  try{
+    const d=JSON.parse(decodeURIComponent(escape(atob(location.hash.slice(3)))));
+    const sp=SPECIES[d.e]||SPECIES.mezquite;
+    const fake={especie:d.e in SPECIES?d.e:'mezquite', fecha:d.f, riegos:[]};
+    const age=(Date.now()-d.f)/DAY;
+    openModal(`<div class="center">
+      <div style="font-size:52px">${sp.emoji}</div>
+      <h2 class="sec" style="text-align:center">${esc(d.n).toUpperCase()}</h2>
+      <div class="dim">${sp.nombre} · <i>${sp.sci}</i></div>
+      <p style="margin:12px 0;font-size:14px">Plantado por <b>${d.av||'🌱'} ${esc(d.p)}</b><br><span class="dim">el ${new Date(d.f).toLocaleDateString('es-MX',{day:'numeric',month:'long',year:'numeric'})}</span></p>
+    </div>
+    <div class="detail" style="border-top:1px dashed var(--line)">
+      🕐 <b>Edad:</b> ${fmtDias(age)}<br>
+      🌍 <b>CO₂ secuestrado:</b> ~${co2Of(fake).toFixed(1)} kg<br>
+      🍃 <b>Sombra que aporta:</b> ~${canopyOf(fake).toFixed(1)} m²<br>
+      📈 <b>Crecimiento:</b> ${sp.crec}<br>
+      ⏳ <b>Puede vivir:</b> ${sp.vida}<br>
+      📍 <a href="https://www.openstreetmap.org/?mlat=${+d.la||0}&mlon=${+d.lo||0}#map=18/${+d.la||0}/${+d.lo||0}" target="_blank" style="color:var(--cyan)">Ver su ubicación en el mapa</a>
+    </div>
+    <p style="font-size:13px;background:var(--panel2);border-radius:10px;padding:10px;margin:10px 0">${sp.totem.e} ${sp.totem.rel}</p>
+    <button class="btn full" onclick="location.hash='';closeModal();">🎮 ¡QUIERO PLANTAR EL MÍO!</button>`);
+  }catch(e){ location.hash=''; if(!S.player) onboarding(); }
 }
 
 /* ================= TRIVIA SONORENSE ================= */
@@ -810,7 +899,7 @@ function equipItem(k,on){
 
 /* ================= MODAL / ONBOARDING ================= */
 function openModal(html){ const m=$('#modal'); m.innerHTML=`<div class="box">${html}<br><button class="btn sm ghost full" onclick="closeModal()">CERRAR</button></div>`; m.classList.add('open'); }
-function closeModal(){ $('#modal').classList.remove('open'); }
+function closeModal(){ $('#modal').classList.remove('open'); if(!S.player) onboarding(); }
 
 // Fauna nativa de Sonora y el Valle del Yaqui
 const AVATARES=[['🦌','Venado'],['🐺','Coyote'],['🦎','Cachora'],['🐍','Cascabel'],['🦉','Tecolote'],['🦅','Águila'],['🐢','Tortuga'],['🦂','Alacrán'],['🐆','Jaguar'],['🦇','Murciélago']];
@@ -849,8 +938,9 @@ function startGame(){
 }
 
 /* ================= INIT ================= */
-if(!S.player) onboarding(); else render();
 if(S.player) render();
+if(location.hash.startsWith('#a=')) visitorHash();
+else if(!S.player) onboarding();
 </script>
 </body>
 </html>
