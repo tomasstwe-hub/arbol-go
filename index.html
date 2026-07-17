@@ -503,6 +503,73 @@ function usarTotem(k){
   render();
 }
 
+/* ================= TRIVIA SONORENSE ================= */
+const TRIVIA=[
+ {q:'¿Cómo se llaman a sí mismos los yaquis?',o:['Yoeme','Comcaac','Rarámuri'],a:0,d:'Yoeme significa "gente". Los yaquis viven en 8 pueblos tradicionales a lo largo del Río Yaqui.'},
+ {q:'¿Qué imita la danza más famosa de los yaquis?',o:['Al coyote','Al venado','Al águila'],a:1,d:'La Danza del Venado imita los movimientos del venado bura. Es símbolo de Sonora y patrimonio vivo yaqui.'},
+ {q:'¿Dónde viven los Comcaac (seris)?',o:['En la sierra','En la costa del Golfo e Isla Tiburón','En el Valle del Yaqui'],a:1,d:'Los Comcaac son pescadores del desierto costero. Su lengua no se parece a ninguna otra del mundo.'},
+ {q:'¿Cuál es la isla más grande de México?',o:['Isla Tiburón (Sonora)','Cozumel','Isla del Carmen'],a:0,d:'Isla Tiburón, frente a la costa seri, es reserva natural con venado bura y borrego cimarrón.'},
+ {q:'El Pinacate es famoso por sus...',o:['Playas','Cráteres volcánicos gigantes','Cascadas'],a:1,d:'El Pinacate es Patrimonio de la Humanidad. ¡Los astronautas del Apolo entrenaron ahí por parecerse a la Luna!'},
+ {q:'Sonora es el #1 de México produciendo...',o:['Cobre','Petróleo','Café'],a:0,d:'La mina de Cananea es una de las más grandes de cobre del mundo. Sonora también es #1 en oro.'},
+ {q:'¿Cómo le dicen al Valle del Yaqui?',o:['El jardín de México','El granero de México','La huerta del norte'],a:1,d:'Por su trigo. Aquí nació la Revolución Verde con Norman Borlaug, que ganó el Premio Nobel de la Paz.'},
+ {q:'¿Qué armadora de autos está en Hermosillo?',o:['Toyota','Ford','BMW'],a:1,d:'La planta Ford de Hermosillo exporta autos a todo el mundo desde 1986.'},
+ {q:'¿Cuánta gente vive en Sonora aprox.?',o:['1 millón','3 millones','10 millones'],a:1,d:'Cerca de 3 millones. Casi un tercio vive en Hermosillo, la capital.'},
+ {q:'¿La capital de Sonora es...?',o:['Cd. Obregón','Hermosillo','Nogales'],a:1,d:'Hermosillo, la "ciudad del sol". Cd. Obregón es la segunda más grande.'},
+ {q:'¿A cuánto ha llegado el calor en Sonora?',o:['42°C','46°C','Más de 50°C'],a:2,d:'Sonora ha registrado más de 52°C. Por eso los árboles de sombra son ORO en nuestras ciudades.'},
+ {q:'¿Cómo le decimos a las lluvias de verano?',o:['Las aguas / el monzón','El norte','La brisa'],a:0,d:'El monzón de julio-agosto trae la mayor parte de la lluvia del año. ¡El mejor momento para plantar!'},
+ {q:'Las lluvias ligeras de invierno se llaman...',o:['Equipatas','Chubascos','Cabañuelas'],a:0,d:'Las equipatas vienen del Pacífico en invierno. Suaves pero valiosísimas para el monte.'},
+ {q:'Sonora exporta carne de cerdo sobre todo a...',o:['España','Japón','Brasil'],a:1,d:'Japón compra la mayor parte del cerdo sonorense, famoso por su calidad.'},
+ {q:'Sonora es líder nacional exportando esta fruta:',o:['Manzana','Uva de mesa','Piña'],a:1,d:'La uva de mesa de Hermosillo y Caborca sale a EUA y Asia cada primavera.'},
+ {q:'¿Cuál es el gran puerto camaronero de Sonora?',o:['Guaymas','Puerto Peñasco','Huatabampo'],a:0,d:'Guaymas y su bahía han sido puerto pesquero desde tiempos coloniales. El camarón es su joya.'},
+ {q:'La lengua yaqui pertenece a la familia...',o:['Maya','Yuto-azteca','Mixteca'],a:1,d:'El yaqui y el mayo son lenguas cahítas de la familia yuto-azteca, ¡pariente lejana del náhuatl!'},
+ {q:'"Tohono O\'odham" (pápagos) significa...',o:['Gente del desierto','Gente del río','Gente del maíz'],a:0,d:'Los Tohono O\'odham viven en el desierto de Altar, entre Sonora y Arizona. Maestros del desierto.'},
+ {q:'¿Dónde viven los guarijíos?',o:['En la costa','En la sierra del sur de Sonora','En la frontera'],a:1,d:'Los guarijíos (macurawe) viven en la sierra alta del río Mayo. Son unos 2 mil hablantes.'},
+ {q:'¿Qué presa riega el Valle del Yaqui?',o:['Presa Álvaro Obregón (El Oviáchic)','Presa Hoover','El Novillo'],a:0,d:'El Oviáchic guarda el agua del Río Yaqui que riega más de 200 mil hectáreas de cultivo.'},
+ {q:'El Desierto de Sonora es el más ____ del mundo',o:['Seco','Biodiverso','Pequeño'],a:1,d:'Es el desierto con más especies del planeta: sahuaros, palo fierro, más de 2,000 plantas.'},
+ {q:'¿Cuánto tarda un sahuaro en sacar su primer brazo?',o:['5 años','20 años','50-75 años'],a:2,d:'¡50 a 75 años! Un sahuaro con brazos es más viejo que tus abuelos. Respeto total.'},
+ {q:'Al este de Sonora se levanta la...',o:['Sierra Madre Occidental','Sierra Nevada','Sierra Gorda'],a:0,d:'La Sierra Madre Occidental tiene bosques de pino y encino, y ahí nacen nuestros ríos.'},
+ {q:'¿Qué río le da vida a la región de Cd. Obregón?',o:['Río Bravo','Río Yaqui','Río Colorado'],a:1,d:'El Río Yaqui baja de la sierra, llena El Oviáchic y riega el granero de México.'},
+ {q:'¿Cómo se llaman a sí mismos los mayos?',o:['Yoreme','Seri','Pima'],a:0,d:'Yoreme significa "el que respeta la tradición". Viven entre el sur de Sonora y el norte de Sinaloa.'},
+ {q:'¿Quién fue Cajeme?',o:['Un general español','Un líder yaqui','Un minero'],a:1,d:'José María Leyva "Cajeme" defendió el territorio yaqui en el siglo XIX. El municipio de Cd. Obregón lleva su nombre.'},
+ {q:'El Gran Desierto de Altar tiene las ____ más grandes de Norteamérica',o:['Dunas de arena','Cuevas','Lagunas'],a:0,d:'Sus dunas gigantes se ven desde el espacio, junto a los cráteres del Pinacate.'},
+ {q:'¿Qué borrego salvaje vive en las sierras de Sonora?',o:['Borrego cimarrón','Muflón','Cabra montés'],a:0,d:'El borrego cimarrón trepa riscos del desierto. Es de los animales más admirados de Sonora.'},
+ {q:'Las maquiladoras de Sonora importan sobre todo...',o:['Juguetes','Autopartes y electrónica','Ropa'],a:1,d:'Importan componentes, los ensamblan y exportan autos y electrónica. Nogales es la puerta.'},
+ {q:'¿Qué cultivo domina el Valle del Yaqui en invierno?',o:['Trigo','Maíz','Caña'],a:0,d:'El trigo cristalino del Yaqui se exporta a medio mundo para hacer pastas. Se siembra en noviembre.'}
+];
+let tState=null;
+function triviaHoy(){
+  const s=dayStr(); let h=0; for(const c of s) h=(h*31+c.charCodeAt(0))>>>0;
+  const idx=[]; let k=h%TRIVIA.length; const paso=(h%7)+1;
+  while(idx.length<3){ if(!idx.includes(k)) idx.push(k); k=(k+paso)%TRIVIA.length; }
+  return idx;
+}
+function startTrivia(){
+  const p=S.player;
+  if(!p.trivia || p.trivia.date!==dayStr()){ p.trivia={date:dayStr(), done:0, ok:0}; save(); }
+  if(p.trivia.done>=3){
+    openModal(`<h2 class="sec">🧠 TRIVIA <span>SONORENSE</span></h2><p class="center" style="margin:12px 0">Ya jugaste la de hoy: <b style="color:var(--neon)">${p.trivia.ok}/3</b> 🎯<br><br>Mañana hay 3 preguntas nuevas 🌵</p>`);
+    return;
+  }
+  tState={idx:triviaHoy(), i:S.player.trivia.done};
+  triviaQ();
+}
+function triviaQ(){
+  const t=TRIVIA[tState.idx[tState.i]];
+  openModal(`<h2 class="sec">🧠 TRIVIA <span>SONORENSE</span> <span class="dim" style="font-size:12px;font-style:normal">${tState.i+1}/3</span></h2>
+    <p style="font-weight:800;font-size:15px;margin:12px 0">${t.q}</p>
+    ${t.o.map((o,j)=>`<button class="btn ghost full" style="margin-bottom:8px;text-align:left;font-style:normal" onclick="triviaAns(${j})">${o}</button>`).join('')}`);
+}
+function triviaAns(j){
+  const t=TRIVIA[tState.idx[tState.i]], ok=(j===t.a);
+  S.player.trivia.done++; if(ok) S.player.trivia.ok++;
+  addXP(ok?10:2, ok?5:0); save();
+  const last=tState.i>=2;
+  openModal(`<div class="center" style="font-size:44px">${ok?'✅':'❌'}</div>
+    <p class="center" style="font-weight:900;margin:8px 0">${ok?'¡CORRECTO! +10 XP +5 🍃':'Casi... la buena era: '+t.o[t.a]+' (+2 XP por aprender)'}</p>
+    <p style="font-size:13px;background:var(--panel2);border-radius:10px;padding:12px;margin:10px 0">💡 ${t.d}</p>
+    <button class="btn full" onclick="${last?'closeModal();render();':'tState.i++;triviaQ();'}">${last?'🏁 TERMINAR':'SIGUIENTE ➡️'}</button>`);
+}
+
 function vMapa(){
   const co2 = S.trees.reduce((a,t)=>a+co2Of(t),0);
   const verde = S.trees.reduce((a,t)=>a+canopyOf(t),0);
@@ -701,6 +768,12 @@ function vMono(){
     </div>
     <p class="dim" style="margin-bottom:14px">Toca a tu mono para que te hable · Gana ${META_DIA} XP diarios o pierdes la racha 🔥</p>
   </div>
+  ${(()=>{ const tv=(p.trivia&&p.trivia.date===dayStr())?p.trivia.done:0;
+  return `<div class="card" style="display:flex;align-items:center;gap:12px;text-align:left">
+    <div style="font-size:32px">🧠</div>
+    <div style="flex:1"><b>Trivia Sonorense</b><div class="dim" style="font-size:11px">3 preguntas diarias de tu tierra: pueblos, desierto, historia y más. Hasta +30 XP.</div></div>
+    <button class="btn sm pink" onclick="startTrivia()">${tv>=3?'✅ HECHA':'JUGAR '+tv+'/3'}</button>
+  </div>`; })()}
   <h2 class="sec" style="font-size:15px">TÓTEMS <span>DEL MONTE</span> 🪶 <span class="dim" style="font-size:11px;font-style:normal">${p.totems.length}/${Object.keys(SPECIES).length}</span></h2>
   <p class="dim" style="margin-bottom:10px">Planta una especie nueva y ganas su animal tótem. Tócalos para aprender de su árbol.</p>
   <div class="grid3" style="margin-bottom:16px">${Object.entries(SPECIES).map(([k,sp])=>{
