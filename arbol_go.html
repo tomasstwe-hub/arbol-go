@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ÁRBOL GO · Street Forest</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root{
+  --bg:#0d0f12; --panel:#171a20; --panel2:#1f242c; --line:#2b323d;
+  --neon:#39ff14; --pink:#ff2e88; --cyan:#00e5ff; --yellow:#ffe600;
+  --txt:#f2f5f7; --dim:#8b97a5;
+  --ok:#39ff14; --warn:#ffe600; --bad:#ff3b3b;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{background:var(--bg);color:var(--txt);font-family:-apple-system,'Helvetica Neue',Arial,sans-serif;overscroll-behavior:none}
+#app{max-width:480px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;position:relative;background:
+  radial-gradient(circle at 85% -10%, rgba(57,255,20,.08), transparent 40%),
+  radial-gradient(circle at -10% 30%, rgba(255,46,136,.07), transparent 40%), var(--bg)}
+header{padding:14px 16px 10px;display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid var(--line)}
+.logo{font-weight:900;font-size:24px;font-style:italic;letter-spacing:-1px;transform:rotate(-2deg)}
+.logo .a{color:var(--neon);text-shadow:0 0 12px rgba(57,255,20,.6)}
+.logo .g{color:var(--pink);text-shadow:0 0 12px rgba(255,46,136,.6)}
+.logo small{display:block;font-size:9px;letter-spacing:3px;color:var(--dim);font-style:normal;transform:none}
+.chip{background:var(--panel2);border:1px solid var(--line);border-radius:20px;padding:6px 12px;font-size:12px;font-weight:700;display:flex;gap:10px;align-items:center}
+.chip .lv{color:var(--cyan)}
+.chip .hj{color:var(--neon)}
+main{flex:1;overflow-y:auto;padding:14px 14px 90px}
+nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;display:flex;background:rgba(13,15,18,.97);border-top:2px solid var(--line);z-index:1000;backdrop-filter:blur(6px)}
+nav button{flex:1;background:none;border:none;color:var(--dim);padding:9px 2px 10px;font-size:10px;font-weight:800;cursor:pointer;position:relative;letter-spacing:.5px}
+nav button .ic{display:block;font-size:21px;margin-bottom:2px;filter:grayscale(1) opacity(.6)}
+nav button.on{color:var(--neon)}
+nav button.on .ic{filter:none}
+nav .bdg{position:absolute;top:2px;right:calc(50% - 22px);background:var(--bad);color:#fff;font-size:10px;min-width:17px;height:17px;border-radius:9px;line-height:17px;font-weight:900}
+h2.sec{font-size:20px;font-weight:900;font-style:italic;margin:4px 0 12px;transform:rotate(-1deg)}
+h2.sec span{background:linear-gradient(90deg,var(--neon),var(--cyan));-webkit-background-clip:text;background-clip:text;color:transparent}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
+.banner{border-radius:12px;padding:10px 14px;margin-bottom:12px;font-size:13px;font-weight:700;border:1px solid}
+.banner.bad{background:rgba(255,59,59,.12);border-color:var(--bad);color:#ff8a8a}
+.banner.ok{background:rgba(57,255,20,.08);border-color:rgba(57,255,20,.4);color:var(--neon)}
+.btn{display:inline-block;background:var(--neon);color:#0a0c0e;border:none;border-radius:10px;padding:11px 18px;font-size:14px;font-weight:900;cursor:pointer;font-style:italic;letter-spacing:.3px;box-shadow:0 0 14px rgba(57,255,20,.25)}
+.btn.pink{background:var(--pink);color:#fff;box-shadow:0 0 14px rgba(255,46,136,.3)}
+.btn.ghost{background:var(--panel2);color:var(--txt);border:1px solid var(--line);box-shadow:none}
+.btn.sm{padding:7px 12px;font-size:12px}
+.btn:disabled{opacity:.35;cursor:not-allowed}
+.btn.full{width:100%;text-align:center}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.stat{background:var(--panel2);border-radius:12px;padding:10px;text-align:center;border:1px solid var(--line)}
+.stat .v{font-size:19px;font-weight:900;color:var(--neon)}
+.stat .v.pk{color:var(--pink)} .stat .v.cy{color:var(--cyan)} .stat .v.yl{color:var(--yellow)}
+.stat .l{font-size:10px;color:var(--dim);font-weight:700;letter-spacing:.5px;text-transform:uppercase;margin-top:2px}
+#map,#miniMap{height:340px;border-radius:14px;border:2px solid var(--line);z-index:1}
+#miniMap{height:200px}
+.leaflet-container{background:#0d0f12;font:inherit}
+.tree{display:flex;gap:12px;align-items:center}
+.tree .em{font-size:34px;width:54px;height:54px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:var(--panel2);border:2px solid var(--line);flex-shrink:0}
+.tree .em.st-ok{border-color:var(--ok)} .tree .em.st-warn{border-color:var(--warn)} .tree .em.st-bad{border-color:var(--bad);animation:puls 1.2s infinite}
+@keyframes puls{50%{box-shadow:0 0 14px rgba(255,59,59,.7)}}
+.tree .nm{font-weight:900;font-size:15px}
+.tree .meta{font-size:11px;color:var(--dim);margin-top:2px}
+.tag{display:inline-block;font-size:10px;font-weight:900;padding:2px 8px;border-radius:8px;margin-top:4px}
+.tag.ok{background:rgba(57,255,20,.14);color:var(--ok)}
+.tag.warn{background:rgba(255,230,0,.14);color:var(--warn)}
+.tag.bad{background:rgba(255,59,59,.16);color:var(--bad)}
+.trow{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.detail{font-size:12px;color:var(--dim);line-height:1.9;margin-top:10px;border-top:1px dashed var(--line);padding-top:8px}
+.detail b{color:var(--txt)}
+input,select,textarea{width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:10px;padding:11px;font-size:14px;margin-bottom:10px;font-family:inherit}
+label{font-size:11px;font-weight:800;color:var(--dim);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:5px}
+.spick{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;margin-bottom:10px}
+.spick .sp{flex-shrink:0;width:86px;background:var(--panel2);border:2px solid var(--line);border-radius:12px;padding:10px 6px;text-align:center;cursor:pointer}
+.spick .sp.sel{border-color:var(--neon);box-shadow:0 0 10px rgba(57,255,20,.3)}
+.spick .sp .e{font-size:26px}.spick .sp .n{font-size:11px;font-weight:800;margin-top:4px}
+.spick .sp .s{font-size:9px;color:var(--dim)}
+#modal{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:2000;display:none;align-items:center;justify-content:center;padding:20px}
+#modal.open{display:flex}
+#modal .box{background:var(--panel);border:2px solid var(--line);border-radius:18px;padding:22px;max-width:400px;width:100%;max-height:85vh;overflow-y:auto}
+.toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:var(--neon);color:#0a0c0e;font-weight:900;padding:10px 20px;border-radius:12px;z-index:3000;font-style:italic;box-shadow:0 4px 24px rgba(57,255,20,.5);animation:tin .25s}
+@keyframes tin{from{transform:translateX(-50%) translateY(-30px);opacity:0}}
+.xpbar{height:12px;background:var(--panel2);border-radius:6px;overflow:hidden;border:1px solid var(--line);margin:6px 0 4px}
+.xpbar i{display:block;height:100%;background:linear-gradient(90deg,var(--neon),var(--cyan));border-radius:6px;transition:width .5s}
+.badge{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px;text-align:center}
+.badge.off{opacity:.3;filter:grayscale(1)}
+.badge .e{font-size:26px}.badge .t{font-size:10px;font-weight:800;margin-top:4px}
+.shop-item{display:flex;align-items:center;gap:12px}
+.shop-item .e{font-size:30px}
+.price{color:var(--neon);font-weight:900;font-size:14px;white-space:nowrap}
+.avrow{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.avrow span{font-size:28px;padding:8px;background:var(--panel2);border:2px solid var(--line);border-radius:12px;cursor:pointer}
+.avrow span.sel{border-color:var(--pink);box-shadow:0 0 10px rgba(255,46,136,.4)}
+.foto{width:100%;border-radius:10px;margin-top:8px;border:1px solid var(--line)}
+.sticker{position:absolute;font-size:11px;font-weight:900;font-style:italic;padding:3px 10px;border-radius:8px;transform:rotate(4deg)}
+.center{text-align:center}
+.dim{color:var(--dim);font-size:12px}
+</style>
+</head>
+<body>
+<div id="nojs" style="background:#ff3b3b;color:#fff;padding:16px;text-align:center;font-weight:800;font-size:14px;line-height:1.6">⚠️ Este visor no puede ejecutar el juego.<br>Descarga el archivo y ábrelo con <u>Chrome</u>.<br><span style="font-weight:400;font-size:12px">Android: Mis Archivos → arbol_go.html → Abrir con Chrome</span></div>
+<div id="app">
+  <header>
+    <div class="logo"><span class="a">ÁRBOL</span> <span class="g">GO</span><small>STREET FOREST · CD. OBREGÓN</small></div>
+    <div class="chip"><span id="chipAv">🛹</span><span class="lv" id="chipLv">Lv1</span><span class="hj" id="chipHj">🍃0</span></div>
+  </header>
+  <main id="view"></main>
+  <nav id="nav">
+    <button data-t="mapa"><span class="ic">🗺️</span>MAPA</button>
+    <button data-t="arboles"><span class="ic">🌳</span>MI CREW</button>
+    <button data-t="plantar"><span class="ic">➕</span>PLANTAR</button>
+    <button data-t="tienda"><span class="ic">🛒</span>TIENDA</button>
+    <button data-t="perfil"><span class="ic">🏆</span>PERFIL</button>
+  </nav>
+</div>
+<div id="modal"></div>
+
+<script>
+document.getElementById('nojs').remove();
+/* ================= DATOS ================= */
+const OBREGON = [27.4828, -109.9304];
+const DAY = 86400000;
+
+const SPECIES = {
+  mezquite:  {nombre:'Mezquite',   emoji:'🌳', sci:'Prosopis velutina',      base:true,  riego:4, co2:18, canopy:40, desc:'El rey del desierto. Sombra, vainas y raíces profundas.'},
+  paloverde: {nombre:'Palo Verde', emoji:'🌵', sci:'Parkinsonia microphylla', base:true,  riego:5, co2:12, canopy:25, desc:'Tronco verde que hace fotosíntesis. Flores amarillas.'},
+  guamuchil: {nombre:'Guamúchil',  emoji:'🌲', sci:'Pithecellobium dulce',    base:true,  riego:3, co2:22, canopy:50, desc:'Sombra gigante y fruta para los pájaros (y para ti).'},
+  palofierro:{nombre:'Palo Fierro',emoji:'🪵', sci:'Olneya tesota',           cost:200,   riego:6, co2:15, canopy:30, desc:'Madera durísima, vive siglos. Nodriza del desierto.'},
+  guayacan:  {nombre:'Guayacán',   emoji:'💜', sci:'Guaiacum coulteri',       cost:300,   riego:4, co2:10, canopy:20, desc:'Flores moradas de otro planeta. Joya sonorense.'},
+  amapa:     {nombre:'Amapa',      emoji:'🌸', sci:'Tabebuia impetiginosa',   cost:400,   riego:3, co2:20, canopy:35, desc:'Explota en rosa cada primavera. Nivel leyenda.'},
+  alamo:     {nombre:'Álamo',      emoji:'🍃', sci:'Populus fremontii',       cost:500,   riego:2, co2:30, canopy:60, desc:'Bestia de crecimiento rápido. Necesita agua constante.'}
+};
+
+const LEVELS = [
+  {xp:0,    t:'Semilla Rookie',       e:'🛹'},
+  {xp:300,  t:'Plantador Callejero',  e:'🧢'},
+  {xp:800,  t:'Guardián del Barrio',  e:'🔥'},
+  {xp:1600, t:'Ranger Urbano',        e:'🌵'},
+  {xp:3000, t:'Maestro Mezquitero',   e:'🌳'},
+  {xp:5000, t:'Leyenda Verde',        e:'👑'}
+];
+
+// Clima Cd. Obregón por mes (0=Ene): horas luz/día, horas >35°C/día, horas <7°C/día
+const DAYLIGHT = [10.5,11.1,12.0,13.0,13.8,14.2,14.0,13.3,12.4,11.4,10.6,10.2];
+const HOT  = [0,0,0,1,4,8,9,9,7,3,0,0];
+const COLD = [3,2,0.5,0,0,0,0,0,0,0,0.5,2.5];
+// Factor de riego por temporada (verano = más seguido)
+const SEASON = [1.6,1.6,1.0,1.0,0.8,0.6,0.6,0.6,0.6,0.8,1.6,1.6];
+
+const XP_PLANT=100, XP_RIEGO=15, XP_RIEGO_EARLY=3, XP_CHECKIN=20;
+const HJ_PLANT=50, HJ_RIEGO=10, PRECIO_ARBOL=150;
+
+/* ================= ESTADO ================= */
+let S = null, STORAGE_OK = true;
+function load(){
+  try{ S = JSON.parse(localStorage.getItem('arbolgo')||'null'); }catch(e){ S=null; STORAGE_OK=false; }
+  if(!S) S = {player:null, trees:[], unlocked:['mezquite','paloverde','guamuchil'], log:[]};
+}
+function save(){ try{ localStorage.setItem('arbolgo', JSON.stringify(S)); }catch(e){ STORAGE_OK=false; } }
+load();
+
+/* ================= HELPERS ================= */
+const $ = s=>document.querySelector(s);
+const esc = s=>(s||'').replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+function toast(msg){ const t=document.createElement('div'); t.className='toast'; t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(),2200); }
+function fmtDias(d){ if(d<1) return 'hoy'; if(d<30) return Math.floor(d)+' días'; if(d<365) return (d/30.4).toFixed(1)+' meses'; return (d/365).toFixed(1)+' años'; }
+
+function levelOf(xp){ let i=0; LEVELS.forEach((l,k)=>{ if(xp>=l.xp) i=k; }); return i; }
+
+function lastRiego(t){ return t.riegos.length ? t.riegos[t.riegos.length-1].f : t.fecha; }
+
+function statusOf(t){
+  const sp = SPECIES[t.especie];
+  const need = sp.riego * SEASON[new Date().getMonth()];
+  const days = (Date.now() - lastRiego(t)) / DAY;
+  const ratio = days / need;
+  if(ratio >= 1) return {k:'bad', txt:'🚨 RIEGO URGENTE', ratio, need};
+  if(ratio >= .7) return {k:'warn', txt:'💧 Riego pronto', ratio, need};
+  return {k:'ok', txt:'💚 Al tiro', ratio, need};
+}
+
+function climaTree(t){
+  // Suma horas de luz / calor / frío desde plantado, por mes
+  let luz=0, calor=0, frio=0;
+  const d = new Date(t.fecha), end = new Date();
+  for(let x=new Date(d); x<=end; x.setDate(x.getDate()+1)){
+    const m = x.getMonth();
+    luz+=DAYLIGHT[m]; calor+=HOT[m]; frio+=COLD[m];
+  }
+  return {luz:Math.round(luz), calor:Math.round(calor), frio:Math.round(frio)};
+}
+
+function co2Of(t){
+  const sp=SPECIES[t.especie];
+  const yrs=(Date.now()-t.fecha)/DAY/365;
+  return sp.co2 * yrs * Math.min(1, 0.3 + yrs/4);
+}
+function canopyOf(t){
+  const sp=SPECIES[t.especie];
+  const yrs=(Date.now()-t.fecha)/DAY/365;
+  return sp.canopy * Math.min(1, yrs/10);
+}
+function urgentCount(){ return S.trees.filter(t=>statusOf(t).k==='bad').length; }
+
+function addXP(xp, hojas){
+  const before = levelOf(S.player.xp);
+  S.player.xp += xp; S.player.hojas += (hojas||0);
+  const after = levelOf(S.player.xp);
+  if(after>before) setTimeout(()=>toast(`⬆️ ¡SUBISTE A ${LEVELS[after].t.toUpperCase()} ${LEVELS[after].e}!`),600);
+  save(); renderChip();
+}
+
+function badges(){
+  const bySp = {};
+  S.trees.forEach(t=>bySp[t.especie]=(bySp[t.especie]||0)+1);
+  const riegos = S.trees.reduce((a,t)=>a+t.riegos.length,0);
+  const list = [];
+  Object.entries(SPECIES).forEach(([k,sp])=>{
+    list.push({e:sp.emoji, t:`Experto en ${sp.nombre}`, on:(bySp[k]||0)>=3, prog:`${bySp[k]||0}/3`});
+  });
+  list.push({e:'💧', t:'Hidro Homie',   on:riegos>=25,           prog:`${riegos}/25 riegos`});
+  list.push({e:'🌊', t:'Rey del Riego', on:riegos>=100,          prog:`${riegos}/100 riegos`});
+  list.push({e:'🏙️', t:'10 en la Calle',on:S.trees.length>=10,   prog:`${S.trees.length}/10 árboles`});
+  list.push({e:'🔥', t:'Racha x7',      on:(S.player?.racha||0)>=7, prog:`racha ${S.player?.racha||0}/7`});
+  return list;
+}
+
+/* ================= NAV ================= */
+let TAB='arboles', mapObj=null, miniObj=null, plantLoc=null, plantSp='mezquite';
+
+document.getElementById('nav').addEventListener('click', e=>{
+  const b = e.target.closest('button'); if(!b) return;
+  TAB = b.dataset.t; render();
+});
+
+function renderChip(){
+  if(!S.player) return;
+  const lv = levelOf(S.player.xp);
+  $('#chipAv').textContent = S.player.avatar;
+  $('#chipLv').textContent = 'Lv'+(lv+1);
+  $('#chipHj').textContent = '🍃'+S.player.hojas;
+}
+
+function render(){
+  if(mapObj){ mapObj.remove(); mapObj=null; }
+  if(miniObj){ miniObj.remove(); miniObj=null; }
+  document.querySelectorAll('#nav button').forEach(b=>{
+    b.classList.toggle('on', b.dataset.t===TAB);
+    const old=b.querySelector('.bdg'); if(old) old.remove();
+    if(b.dataset.t==='arboles'){
+      const u=urgentCount();
+      if(u){ const s=document.createElement('span'); s.className='bdg'; s.textContent=u; b.appendChild(s); }
+    }
+  });
+  renderChip();
+  ({mapa:vMapa, arboles:vArboles, plantar:vPlantar, tienda:vTienda, perfil:vPerfil})[TAB]();
+}
+
+/* ================= VISTAS ================= */
+function vArboles(){
+  const u = urgentCount();
+  let h = `<h2 class="sec">MI <span>CREW</span> 🌳</h2>`;
+  if(u) h += `<div class="banner bad">🚨 ¡${u} árbol${u>1?'es':''} de tu crew necesita${u>1?'n':''} agua YA! No dejes morir a la banda.</div>`;
+  else if(S.trees.length) h += `<div class="banner ok">💚 Tu crew está hidratada. Bien jugado.</div>`;
+  if(!S.trees.length){
+    h += `<div class="card center"><div style="font-size:50px">🌱</div><p style="margin:10px 0;font-weight:800">Aún no tienes árboles en la calle.</p><p class="dim">Tienes <b style="color:var(--neon)">${S.player.creditos} créditos</b> de árbol gratis. ¡Ve a PLANTAR!</p><br><button class="btn" onclick="TAB='plantar';render()">➕ PLANTAR MI PRIMERO</button></div>`;
+  }
+  S.trees.slice().sort((a,b)=>statusOf(b).ratio-statusOf(a).ratio).forEach(t=>{
+    const sp=SPECIES[t.especie], st=statusOf(t), cl=climaTree(t);
+    const age=(Date.now()-t.fecha)/DAY;
+    h += `<div class="card">
+      <div class="tree">
+        <div class="em st-${st.k}">${sp.emoji}</div>
+        <div style="flex:1">
+          <div class="nm">${esc(t.nombre)} <span class="dim" style="font-weight:400">· ${sp.nombre}</span></div>
+          <div class="meta">🕐 ${fmtDias(age)} · 💧 ${t.riegos.length} riegos · último hace ${fmtDias((Date.now()-lastRiego(t))/DAY)}</div>
+          <span class="tag ${st.k}">${st.txt}</span>
+        </div>
+      </div>
+      <div class="trow">
+        <button class="btn sm" onclick="regar(${t.id})">💧 REGAR</button>
+        <button class="btn sm pink" onclick="checkin(${t.id})">📸 CHECK-IN</button>
+        <button class="btn sm ghost" onclick="toggleDetail(${t.id})">📊 STATS</button>
+      </div>
+      <div class="detail" id="det${t.id}" style="display:none">
+        ☀️ Horas de luz: <b>${cl.luz.toLocaleString()} h</b> &nbsp; 🥵 Horas de calor (+35°C): <b>${cl.calor.toLocaleString()} h</b> &nbsp; 🥶 Horas frío (-7°C): <b>${cl.frio} h</b><br>
+        🌍 CO₂ secuestrado: <b>${co2Of(t).toFixed(1)} kg</b> &nbsp; 🍃 Sombra aportada: <b>${canopyOf(t).toFixed(1)} m²</b><br>
+        📍 ${t.lat.toFixed(5)}, ${t.lng.toFixed(5)} &nbsp; 🗓️ Plantado: <b>${new Date(t.fecha).toLocaleDateString('es-MX')}</b><br>
+        💧 Riego ideal: cada <b>${st.need.toFixed(1)} días</b> en esta temporada${t.condicion?`<br>🩺 Última condición: <b>${t.condicion}</b>`:''}
+        ${t.foto?`<img class="foto" src="${t.foto}">`:''}
+      </div>
+    </div>`;
+  });
+  $('#view').innerHTML = h;
+}
+function toggleDetail(id){ const d=$('#det'+id); d.style.display = d.style.display==='none'?'block':'none'; }
+
+function regar(id){
+  const t = S.trees.find(x=>x.id===id);
+  const st = statusOf(t);
+  t.riegos.push({f:Date.now()});
+  if(st.ratio>=.7){
+    S.player.racha=(S.player.racha||0)+1;
+    addXP(XP_RIEGO, HJ_RIEGO);
+    toast(`💧 +${XP_RIEGO} XP +${HJ_RIEGO}🍃 · Racha x${S.player.racha} 🔥`);
+  } else {
+    addXP(XP_RIEGO_EARLY,0);
+    toast(`💧 Muy pronto, pero +${XP_RIEGO_EARLY} XP. No lo ahogues 😅`);
+  }
+  save(); render();
+}
+
+function checkin(id){
+  const t = S.trees.find(x=>x.id===id);
+  openModal(`<h2 class="sec">📸 CHECK-IN: <span>${esc(t.nombre)}</span></h2>
+    <label>¿Cómo está el árbol?</label>
+    <select id="cond"><option>💪 Sano y creciendo</option><option>😰 Estresado (hojas caídas)</option><option>🤕 Dañado (vandalismo/plaga)</option></select>
+    <label>Foto (opcional)</label>
+    <input type="file" id="ft" accept="image/*" capture="environment">
+    <button class="btn full" onclick="doCheckin(${id})">GUARDAR +${XP_CHECKIN} XP</button>`);
+}
+function doCheckin(id){
+  const t = S.trees.find(x=>x.id===id);
+  t.condicion = $('#cond').value;
+  const f = $('#ft').files[0];
+  const fin = ()=>{ addXP(XP_CHECKIN,5); save(); closeModal(); toast(`📸 +${XP_CHECKIN} XP · Monitoreo registrado`); render(); };
+  if(f){
+    const img=new Image(), r=new FileReader();
+    r.onload=e=>{ img.onload=()=>{ const c=document.createElement('canvas'); const k=240/Math.max(img.width,img.height);
+      c.width=img.width*k; c.height=img.height*k; c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+      t.foto=c.toDataURL('image/jpeg',.6); fin(); }; img.src=e.target.result; };
+    r.readAsDataURL(f);
+  } else fin();
+}
+
+function vPlantar(){
+  let h = `<h2 class="sec">PLANTAR <span>NUEVO</span> 🌱</h2>`;
+  if(S.player.creditos<1){
+    h += `<div class="card center"><div style="font-size:44px">😬</div><p style="margin:10px 0;font-weight:800">Sin créditos de árbol.</p><p class="dim">Junta 🍃 regando y monitoreando tu crew, y cámbialas en la TIENDA por más árboles.</p><br><button class="btn pink" onclick="TAB='tienda';render()">🛒 IR A LA TIENDA</button></div>`;
+    $('#view').innerHTML=h; return;
+  }
+  h += `<div class="banner ok">🎟️ Tienes <b>${S.player.creditos} crédito${S.player.creditos>1?'s':''}</b> de árbol. Plantar = +${XP_PLANT} XP +${HJ_PLANT}🍃</div>
+  <div class="card">
+    <label>Especie nativa</label>
+    <div class="spick" id="spick">${S.unlocked.map(k=>{const sp=SPECIES[k];return `<div class="sp ${k===plantSp?'sel':''}" data-k="${k}"><div class="e">${sp.emoji}</div><div class="n">${sp.nombre}</div><div class="s">riego c/${sp.riego}d</div></div>`;}).join('')}</div>
+    <div class="dim" id="spdesc" style="margin-bottom:10px">${SPECIES[plantSp].desc}</div>
+    <label>Apodo del árbol</label>
+    <input id="tnom" placeholder="Ej. El Mezquite del Parque Norte" maxlength="40">
+    <label>Ubicación — toca el mapa donde lo plantaste</label>
+    <div id="miniMap"></div>
+    <div class="trow">
+      <button class="btn sm ghost" onclick="usarGPS()">📡 USAR MI GPS</button>
+      <span class="dim" id="locTxt" style="align-self:center">${plantLoc?`📍 ${plantLoc[0].toFixed(4)}, ${plantLoc[1].toFixed(4)}`:'Sin ubicación aún'}</span>
+    </div>
+    <br><button class="btn full" onclick="doPlant()">🌱 ¡PLANTADO! REGISTRAR</button>
+  </div>`;
+  $('#view').innerHTML=h;
+  $('#spick').addEventListener('click',e=>{ const s=e.target.closest('.sp'); if(!s)return; plantSp=s.dataset.k;
+    document.querySelectorAll('.sp').forEach(x=>x.classList.toggle('sel',x.dataset.k===plantSp));
+    $('#spdesc').textContent=SPECIES[plantSp].desc; });
+  try{
+    miniObj = L.map('miniMap').setView(plantLoc||OBREGON, 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OSM'}).addTo(miniObj);
+    let mk = plantLoc? L.marker(plantLoc).addTo(miniObj) : null;
+    miniObj.on('click',e=>{ plantLoc=[e.latlng.lat,e.latlng.lng]; if(mk)mk.remove(); mk=L.marker(plantLoc).addTo(miniObj);
+      $('#locTxt').textContent=`📍 ${plantLoc[0].toFixed(4)}, ${plantLoc[1].toFixed(4)}`; });
+  }catch(e){ $('#miniMap').innerHTML='<p class="dim center" style="padding:20px">Mapa no disponible sin internet — usa el botón GPS.</p>'; }
+}
+function usarGPS(){
+  if(!navigator.geolocation){ toast('⚠️ GPS no disponible'); return; }
+  toast('📡 Buscando señal...');
+  navigator.geolocation.getCurrentPosition(p=>{
+    plantLoc=[p.coords.latitude,p.coords.longitude];
+    $('#locTxt').textContent=`📍 ${plantLoc[0].toFixed(4)}, ${plantLoc[1].toFixed(4)}`;
+    if(miniObj){ miniObj.setView(plantLoc,16); L.marker(plantLoc).addTo(miniObj); }
+  },()=>toast('⚠️ No se pudo obtener GPS — toca el mapa'));
+}
+function doPlant(){
+  const nom = $('#tnom').value.trim();
+  if(!nom){ toast('⚠️ Ponle un apodo a tu árbol'); return; }
+  if(!plantLoc){ toast('⚠️ Marca dónde lo plantaste'); return; }
+  S.trees.push({id:Date.now(), especie:plantSp, nombre:nom, lat:plantLoc[0], lng:plantLoc[1], fecha:Date.now(), riegos:[{f:Date.now()}], foto:null, condicion:null});
+  S.player.creditos--;
+  addXP(XP_PLANT, HJ_PLANT);
+  plantLoc=null;
+  save();
+  toast(`🌱 +${XP_PLANT} XP +${HJ_PLANT}🍃 · ¡${esc(nom)} está en el mapa!`);
+  TAB='arboles'; render();
+}
+
+function vMapa(){
+  const co2 = S.trees.reduce((a,t)=>a+co2Of(t),0);
+  const verde = S.trees.reduce((a,t)=>a+canopyOf(t),0);
+  $('#view').innerHTML = `<h2 class="sec">MAPA DEL <span>BOSQUE URBANO</span></h2>
+    <div class="grid3" style="margin-bottom:12px">
+      <div class="stat"><div class="v">${S.trees.length}</div><div class="l">árboles</div></div>
+      <div class="stat"><div class="v cy">${co2.toFixed(1)}</div><div class="l">kg CO₂</div></div>
+      <div class="stat"><div class="v pk">${verde.toFixed(0)} m²</div><div class="l">área verde</div></div>
+    </div>
+    <div id="map"></div>
+    <p class="dim" style="margin-top:8px">🟢 al tiro · 🟡 riego pronto · 🔴 urgente</p>`;
+  try{
+    mapObj = L.map('map').setView(S.trees.length?[S.trees[0].lat,S.trees[0].lng]:OBREGON, 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OSM'}).addTo(mapObj);
+    const cols={ok:'#39ff14',warn:'#ffe600',bad:'#ff3b3b'};
+    S.trees.forEach(t=>{
+      const st=statusOf(t), sp=SPECIES[t.especie];
+      L.circleMarker([t.lat,t.lng],{radius:10,color:cols[st.k],fillColor:cols[st.k],fillOpacity:.7})
+        .addTo(mapObj).bindPopup(`<b>${esc(t.nombre)}</b><br>${sp.emoji} ${sp.nombre}<br>${st.txt}<br>💧 ${t.riegos.length} riegos · ${fmtDias((Date.now()-t.fecha)/DAY)}`);
+    });
+  }catch(e){ $('#map').innerHTML='<p class="dim center" style="padding:30px">🛜 El mapa necesita internet. Tus árboles siguen guardados en MI CREW.</p>'; }
+}
+
+function vTienda(){
+  let h = `<h2 class="sec">TIENDA <span>STREET</span> 🛒</h2>
+  <div class="banner ok">🍃 Tienes <b>${S.player.hojas} hojas</b>. Se ganan plantando, regando a tiempo y haciendo check-ins.</div>
+  <div class="card shop-item"><div class="e">🎟️</div><div style="flex:1"><b>Crédito de árbol</b><div class="dim">Un árbol nuevo para plantar donde quieras</div></div>
+    <div class="center"><div class="price">${PRECIO_ARBOL} 🍃</div><button class="btn sm" ${S.player.hojas<PRECIO_ARBOL?'disabled':''} onclick="comprarCredito()">CANJEAR</button></div></div>
+  <h2 class="sec" style="font-size:15px;margin-top:18px">DESBLOQUEA <span>ESPECIES PRO</span></h2>`;
+  Object.entries(SPECIES).filter(([k,sp])=>!sp.base).forEach(([k,sp])=>{
+    const has = S.unlocked.includes(k);
+    h += `<div class="card shop-item"><div class="e">${sp.emoji}</div><div style="flex:1"><b>${sp.nombre}</b> <span class="dim">· ${sp.sci}</span><div class="dim">${sp.desc}</div></div>
+      <div class="center">${has?'<div class="price">✅ TUYO</div>':`<div class="price">${sp.cost} 🍃</div><button class="btn sm pink" ${S.player.hojas<sp.cost?'disabled':''} onclick="unlock('${k}')">DESBLOQUEAR</button>`}</div></div>`;
+  });
+  $('#view').innerHTML=h;
+}
+function comprarCredito(){ S.player.hojas-=PRECIO_ARBOL; S.player.creditos++; save(); toast('🎟️ +1 crédito de árbol. ¡A plantar!'); render(); }
+function unlock(k){ S.player.hojas-=SPECIES[k].cost; S.unlocked.push(k); save(); toast(`${SPECIES[k].emoji} ¡${SPECIES[k].nombre} desbloqueado!`); render(); }
+
+function vPerfil(){
+  const lv = levelOf(S.player.xp);
+  const next = LEVELS[lv+1];
+  const pct = next? Math.min(100,((S.player.xp-LEVELS[lv].xp)/(next.xp-LEVELS[lv].xp))*100) : 100;
+  const riegos = S.trees.reduce((a,t)=>a+t.riegos.length,0);
+  const co2 = S.trees.reduce((a,t)=>a+co2Of(t),0);
+  const verde = S.trees.reduce((a,t)=>a+canopyOf(t),0);
+  const bd = badges();
+  $('#view').innerHTML = `<h2 class="sec">PERFIL <span>${esc(S.player.name).toUpperCase()}</span> ${S.player.avatar}</h2>
+  <div class="card">
+    <b style="font-size:16px">${LEVELS[lv].e} ${LEVELS[lv].t}</b> <span class="dim">· Nivel ${lv+1}</span>
+    <div class="xpbar"><i style="width:${pct}%"></i></div>
+    <div class="dim">${S.player.xp} XP ${next?`· faltan ${next.xp-S.player.xp} para ${next.t}`:'· ¡NIVEL MÁXIMO! 👑'}</div>
+  </div>
+  <div class="grid2">
+    <div class="stat"><div class="v">${S.trees.length}</div><div class="l">árboles plantados</div></div>
+    <div class="stat"><div class="v cy">${riegos}</div><div class="l">riegos totales</div></div>
+    <div class="stat"><div class="v yl">${co2.toFixed(1)} kg</div><div class="l">CO₂ secuestrado</div></div>
+    <div class="stat"><div class="v pk">${verde.toFixed(0)} m²</div><div class="l">área verde nueva</div></div>
+    <div class="stat"><div class="v">🔥 ${S.player.racha||0}</div><div class="l">racha de riegos</div></div>
+    <div class="stat"><div class="v cy">🎟️ ${S.player.creditos}</div><div class="l">créditos de árbol</div></div>
+  </div>
+  <h2 class="sec" style="font-size:15px;margin-top:16px">INSIGNIAS <span>STREET</span></h2>
+  <div class="grid3">${bd.map(b=>`<div class="badge ${b.on?'':'off'}"><div class="e">${b.e}</div><div class="t">${b.t}</div><div class="dim" style="font-size:9px">${b.prog}</div></div>`).join('')}</div>
+  <br><div class="trow">
+    <button class="btn sm ghost" onclick="exportar()">💾 EXPORTAR MI REGISTRO</button>
+    <button class="btn sm ghost" onclick="$('#imp').click()">📂 IMPORTAR</button>
+    <input type="file" id="imp" accept=".json" style="display:none" onchange="importar(this)">
+  </div>`;
+}
+function exportar(){
+  const a=document.createElement('a');
+  a.href='data:application/json,'+encodeURIComponent(JSON.stringify(S));
+  a.download='arbolgo_'+S.player.name+'.json'; a.click();
+  toast('💾 Registro exportado');
+}
+function importar(inp){
+  const r=new FileReader();
+  r.onload=e=>{ try{ S=JSON.parse(e.target.result); save(); toast('📂 Registro importado'); render(); }catch(x){ toast('⚠️ Archivo inválido'); } };
+  r.readAsText(inp.files[0]);
+}
+
+/* ================= MODAL / ONBOARDING ================= */
+function openModal(html){ const m=$('#modal'); m.innerHTML=`<div class="box">${html}<br><button class="btn sm ghost full" onclick="closeModal()">CERRAR</button></div>`; m.classList.add('open'); }
+function closeModal(){ $('#modal').classList.remove('open'); }
+
+let obAv='🛹';
+function onboarding(){
+  const m=$('#modal');
+  m.innerHTML=`<div class="box center">
+    <div class="logo" style="font-size:34px;margin-bottom:4px"><span class="a">ÁRBOL</span> <span class="g">GO</span></div>
+    <p class="dim" style="letter-spacing:2px;font-size:10px;font-weight:800">PLANTA · RIEGA · SUBE DE NIVEL</p>
+    <p style="margin:14px 0;font-size:14px">La ciudad es tu spot. Te regalamos <b style="color:var(--neon)">5 árboles nativos</b> para arrancar. Plántalos en parques, camellones o tu escuela, cuídalos y conviértete en <b style="color:var(--pink)">Leyenda Verde</b>. 🌳🔥</p>
+    <label style="text-align:left">Tu nombre de jugador</label>
+    <input id="obNom" placeholder="Ej. TomiShredder" maxlength="20">
+    <label style="text-align:left">Tu avatar</label>
+    <div class="avrow" id="obAv">${['🛹','🧢','🌵','🦎','🐦','🔥','⚡','🎧'].map(a=>`<span class="${a===obAv?'sel':''}" data-a="${a}">${a}</span>`).join('')}</div>
+    <button class="btn full" onclick="startGame()">🌱 ¡EMPEZAR A PLANTAR!</button>
+  </div>`;
+  m.classList.add('open');
+  $('#obAv').addEventListener('click',e=>{ const s=e.target.closest('span'); if(!s)return; obAv=s.dataset.a;
+    document.querySelectorAll('#obAv span').forEach(x=>x.classList.toggle('sel',x.dataset.a===obAv)); });
+  $('#obNom').addEventListener('keydown',e=>{ if(e.key==='Enter') startGame(); });
+}
+function startGame(){
+  try{
+    const inp=$('#obNom');
+    const n=(inp&&inp.value?inp.value:'').trim();
+    if(!n){ toast('⚠️ Ponte un nombre de jugador'); return; }
+    S.player={name:n, avatar:obAv, xp:0, hojas:0, creditos:5, racha:0};
+    save(); closeModal();
+    toast(`${obAv} ¡Bienvenido ${n}! Tienes 5 árboles gratis 🌳`);
+    if(!STORAGE_OK) setTimeout(()=>alert('⚠️ Este navegador no deja guardar el progreso.\n\nAbre el archivo con Chrome o Safari (no en la vista previa de WhatsApp/Archivos) para que tus árboles se guarden.'),800);
+    TAB='plantar'; render();
+  }catch(err){
+    alert('⚠️ Error al iniciar: '+err.message+'\n\nIntenta abrir el archivo con Chrome o Safari.');
+  }
+}
+
+/* ================= INIT ================= */
+if(!S.player) onboarding(); else render();
+if(S.player) render();
+</script>
+</body>
+</html>
