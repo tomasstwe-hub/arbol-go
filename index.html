@@ -139,13 +139,27 @@ const OBREGON = [27.4828, -109.9304];
 const DAY = 86400000;
 
 const SPECIES = {
-  mezquite:  {nombre:'Mezquite',   emoji:'🌳', sci:'Prosopis velutina',      base:true,  riego:4, co2:18, canopy:40, desc:'El rey del desierto. Sombra, vainas y raíces profundas.'},
-  paloverde: {nombre:'Palo Verde', emoji:'🌵', sci:'Parkinsonia microphylla', base:true,  riego:5, co2:12, canopy:25, desc:'Tronco verde que hace fotosíntesis. Flores amarillas.'},
-  guamuchil: {nombre:'Guamúchil',  emoji:'🌲', sci:'Pithecellobium dulce',    base:true,  riego:3, co2:22, canopy:50, desc:'Sombra gigante y fruta para los pájaros (y para ti).'},
-  palofierro:{nombre:'Palo Fierro',emoji:'🪵', sci:'Olneya tesota',           cost:200,   riego:6, co2:15, canopy:30, desc:'Madera durísima, vive siglos. Nodriza del desierto.'},
-  guayacan:  {nombre:'Guayacán',   emoji:'💜', sci:'Guaiacum coulteri',       cost:300,   riego:4, co2:10, canopy:20, desc:'Flores moradas de otro planeta. Joya sonorense.'},
-  amapa:     {nombre:'Amapa',      emoji:'🌸', sci:'Tabebuia impetiginosa',   cost:400,   riego:3, co2:20, canopy:35, desc:'Explota en rosa cada primavera. Nivel leyenda.'},
-  alamo:     {nombre:'Álamo',      emoji:'🍃', sci:'Populus fremontii',       cost:500,   riego:2, co2:30, canopy:60, desc:'Bestia de crecimiento rápido. Necesita agua constante.'}
+  mezquite:  {nombre:'Mezquite',   emoji:'🌳', sci:'Prosopis velutina',      base:true,  riego:4, co2:18, canopy:40, desc:'El rey del desierto. Sombra, vainas y raíces profundas.',
+    tipo:'Leguminosa del desierto', crec:'60-100 cm/año (rápido)', alt:'8-12 m', vida:'100+ años',
+    totem:{e:'🐺',n:'Coyote',rel:'El coyote come las vainas dulces del mezquite y esparce sus semillas por todo el monte. Sin coyotes habría menos mezquites.'}},
+  paloverde: {nombre:'Palo Verde', emoji:'🌵', sci:'Parkinsonia microphylla', base:true,  riego:5, co2:12, canopy:25, desc:'Tronco verde que hace fotosíntesis. Flores amarillas.',
+    tipo:'Leguminosa de tronco verde (¡hace fotosíntesis sin hojas!)', crec:'40-60 cm/año', alt:'5-8 m', vida:'~100 años',
+    totem:{e:'🐇',n:'Liebre',rel:'La liebre del desierto se refugia del sol bajo el palo verde y mordisquea sus ramas tiernas. Es el árbol oficial del desierto sonorense.'}},
+  guamuchil: {nombre:'Guamúchil',  emoji:'🌲', sci:'Pithecellobium dulce',    base:true,  riego:3, co2:22, canopy:50, desc:'Sombra gigante y fruta para los pájaros (y para ti).',
+    tipo:'Leguminosa de sombra grande', crec:'80-120 cm/año (muy rápido)', alt:'10-15 m', vida:'80+ años',
+    totem:{e:'🦎',n:'Iguana',rel:'Las iguanas y los pájaros se dan festín con la fruta del guamúchil. Tú también puedes: es agridulce y se come con chile.'}},
+  palofierro:{nombre:'Palo Fierro',emoji:'🪵', sci:'Olneya tesota',           cost:200,   riego:6, co2:15, canopy:30, desc:'Madera durísima, vive siglos. Nodriza del desierto.',
+    tipo:'Leguminosa, la madera más dura de Sonora', crec:'20-30 cm/año (lento pero eterno)', alt:'6-10 m', vida:'¡hasta 800 años!',
+    totem:{e:'🦌',n:'Venado Bura',rel:'El venado bura ramonea el palo fierro, el "árbol nodriza": bajo su sombra nacen cactus, aves y medio desierto.'}},
+  guayacan:  {nombre:'Guayacán',   emoji:'💜', sci:'Guaiacum coulteri',       cost:300,   riego:4, co2:10, canopy:20, desc:'Flores moradas de otro planeta. Joya sonorense.',
+    tipo:'Árbol de flor del monte espinoso', crec:'20-40 cm/año (lento)', alt:'4-8 m', vida:'200+ años',
+    totem:{e:'🐝',n:'Abeja',rel:'Las abejas nativas aman las flores moradas del guayacán. Cada guayacán plantado es un comedero para polinizadores.'}},
+  amapa:     {nombre:'Amapa',      emoji:'🌸', sci:'Tabebuia impetiginosa',   cost:400,   riego:3, co2:20, canopy:35, desc:'Explota en rosa cada primavera. Nivel leyenda.',
+    tipo:'Árbol de flor de la selva baja', crec:'50-80 cm/año', alt:'10-20 m', vida:'100+ años',
+    totem:{e:'🐦',n:'Colibrí',rel:'Los colibríes viajan kilómetros para beber el néctar rosa de la amapa cuando florece en primavera.'}},
+  alamo:     {nombre:'Álamo',      emoji:'🍃', sci:'Populus fremontii',       cost:500,   riego:2, co2:30, canopy:60, desc:'Bestia de crecimiento rápido. Necesita agua constante.',
+    tipo:'Ripario: amante del agua y los ríos', crec:'150-250 cm/año (el más rápido)', alt:'15-25 m', vida:'~100 años',
+    totem:{e:'🦫',n:'Castor',rel:'El castor de los ríos de Sonora construye su casa con ramas de álamo. Donde hay álamos, hay agua y hay vida.'}}
 };
 
 const LEVELS = [
@@ -191,6 +205,7 @@ function initGear(p){
   p.strk = p.strk||0; p.prevStrk = p.prevStrk||0;
   p.lastDay = p.lastDay||null;
   p.dayXP = p.dayXP||0; p.dayDate = p.dayDate||dayStr();
+  p.totems = p.totems||[];
 }
 
 /* ================= ESTADO ================= */
@@ -200,6 +215,8 @@ function load(){
   if(!S) S = {player:null, trees:[], unlocked:['mezquite','paloverde','guamuchil'], log:[]};
   if(S.player){
     initGear(S.player);
+    // Migración: tótems ganados por árboles ya plantados
+    S.trees.forEach(t=>{ if(!S.player.totems.includes(t.especie)) S.player.totems.push(t.especie); });
     if(S.player.dayDate!==dayStr()){ S.player.dayXP=0; S.player.dayDate=dayStr(); }
     // Racha rota: no cumplió la meta ayer
     if(S.player.lastDay && S.player.lastDay<yesterdayStr() && S.player.strk>0){
@@ -282,6 +299,8 @@ function badges(){
   list.push({e:'🏙️', t:'10 en la Calle',on:S.trees.length>=10,   prog:`${S.trees.length}/10 árboles`});
   list.push({e:'🔥', t:'Racha x7',      on:(S.player?.racha||0)>=7, prog:`racha ${S.player?.racha||0}/7`});
   list.push({e:'📅', t:'Semana Perfecta',on:(S.player?.strk||0)>=7, prog:`${S.player?.strk||0}/7 días`});
+  const nt=S.player?.totems?.length||0;
+  list.push({e:'🪶', t:'Todos los Tótems',on:nt>=Object.keys(SPECIES).length, prog:`${nt}/${Object.keys(SPECIES).length}`});
   return list;
 }
 
@@ -403,7 +422,8 @@ function vPlantar(){
   <div class="card">
     <label>Especie nativa</label>
     <div class="spick" id="spick">${S.unlocked.map(k=>{const sp=SPECIES[k];return `<div class="sp ${k===plantSp?'sel':''}" data-k="${k}"><div class="e">${sp.emoji}</div><div class="n">${sp.nombre}</div><div class="s">riego c/${sp.riego}d</div></div>`;}).join('')}</div>
-    <div class="dim" id="spdesc" style="margin-bottom:10px">${SPECIES[plantSp].desc}</div>
+    <div class="dim" id="spdesc" style="margin-bottom:6px">${SPECIES[plantSp].desc}</div>
+    <button class="btn sm ghost" id="verTotem" onclick="totemCard(plantSp)" style="margin-bottom:10px">${SPECIES[plantSp].totem.e} VER TÓTEM Y FICHA DEL ÁRBOL</button>
     <label>Apodo del árbol</label>
     <input id="tnom" placeholder="Ej. El Mezquite del Parque Norte" maxlength="40">
     <label>Ubicación — toca el mapa donde lo plantaste</label>
@@ -417,7 +437,8 @@ function vPlantar(){
   $('#view').innerHTML=h;
   $('#spick').addEventListener('click',e=>{ const s=e.target.closest('.sp'); if(!s)return; plantSp=s.dataset.k;
     document.querySelectorAll('.sp').forEach(x=>x.classList.toggle('sel',x.dataset.k===plantSp));
-    $('#spdesc').textContent=SPECIES[plantSp].desc; });
+    $('#spdesc').textContent=SPECIES[plantSp].desc;
+    $('#verTotem').innerHTML=`${SPECIES[plantSp].totem.e} VER TÓTEM Y FICHA DEL ÁRBOL`; });
   try{
     miniObj = L.map('miniMap').setView(plantLoc||OBREGON, 13);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OSM'}).addTo(miniObj);
@@ -441,11 +462,45 @@ function doPlant(){
   if(!plantLoc){ toast('⚠️ Marca dónde lo plantaste'); return; }
   S.trees.push({id:Date.now(), especie:plantSp, nombre:nom, lat:plantLoc[0], lng:plantLoc[1], fecha:Date.now(), riegos:[{f:Date.now()}], foto:null, condicion:null});
   S.player.creditos--;
-  addXP(XP_PLANT, HJ_PLANT);
+  const nuevoTotem = !S.player.totems.includes(plantSp);
+  if(nuevoTotem) S.player.totems.push(plantSp);
+  addXP(XP_PLANT+(nuevoTotem?25:0), HJ_PLANT+(nuevoTotem?15:0));
   plantLoc=null;
   save();
-  toast(`🌱 +${XP_PLANT} XP +${HJ_PLANT}🍃 · ¡${esc(nom)} está en el mapa!`);
+  toast(`🌱 +${XP_PLANT+(nuevoTotem?25:0)} XP +${HJ_PLANT+(nuevoTotem?15:0)}🍃 · ¡${esc(nom)} está en el mapa!`);
+  const sp=plantSp;
   TAB='arboles'; render();
+  if(nuevoTotem) setTimeout(()=>{ toast(`${SPECIES[sp].totem.e} ¡NUEVO TÓTEM: ${SPECIES[sp].totem.n.toUpperCase()}!`); totemCard(sp); }, 900);
+}
+
+/* ================= TÓTEMS ================= */
+function totemCard(k){
+  const sp=SPECIES[k], un=S.player.totems.includes(k);
+  openModal(`<div class="center">
+    <div style="font-size:56px">${un?sp.totem.e:'🔒'}</div>
+    <h2 class="sec" style="text-align:center">TÓTEM <span>${sp.totem.n.toUpperCase()}</span></h2>
+    <div style="font-size:28px">${sp.emoji}</div>
+    <b style="font-size:16px">${sp.nombre}</b>
+    <div class="dim" style="font-style:italic">${sp.sci}</div>
+  </div>
+  <div class="detail" style="border-top:1px dashed var(--line);margin-top:12px">
+    🌿 <b>Tipo:</b> ${sp.tipo}<br>
+    📈 <b>Crecimiento:</b> ${sp.crec}<br>
+    📏 <b>Altura adulta:</b> ${sp.alt}<br>
+    ⏳ <b>Vida:</b> ${sp.vida}<br>
+    💧 <b>Riego de joven:</b> cada ${sp.riego} días (más seguido en verano)<br>
+    🌍 <b>CO₂ de adulto:</b> ~${sp.co2} kg/año
+  </div>
+  <p style="font-size:13px;margin:12px 0;background:var(--panel2);border-radius:10px;padding:10px">${sp.totem.e} ${sp.totem.rel}</p>
+  ${un
+    ? `<button class="btn full" onclick="usarTotem('${k}')">${sp.totem.e} USAR COMO MI AVATAR</button>`
+    : `<div class="banner ok" style="text-align:center">🌱 Planta un ${sp.nombre} para ganar este tótem</div>`}`);
+}
+function usarTotem(k){
+  S.player.avatar = SPECIES[k].totem.e;
+  save(); closeModal();
+  toast(`${SPECIES[k].totem.e} ¡Ahora tu espíritu es ${SPECIES[k].totem.n}!`);
+  render();
 }
 
 function vMapa(){
@@ -646,6 +701,16 @@ function vMono(){
     </div>
     <p class="dim" style="margin-bottom:14px">Toca a tu mono para que te hable · Gana ${META_DIA} XP diarios o pierdes la racha 🔥</p>
   </div>
+  <h2 class="sec" style="font-size:15px">TÓTEMS <span>DEL MONTE</span> 🪶 <span class="dim" style="font-size:11px;font-style:normal">${p.totems.length}/${Object.keys(SPECIES).length}</span></h2>
+  <p class="dim" style="margin-bottom:10px">Planta una especie nueva y ganas su animal tótem. Tócalos para aprender de su árbol.</p>
+  <div class="grid3" style="margin-bottom:16px">${Object.entries(SPECIES).map(([k,sp])=>{
+    const un=p.totems.includes(k);
+    return `<div class="badge ${un?'':'off'}" style="cursor:pointer" onclick="totemCard('${k}')">
+      <div class="e">${un?sp.totem.e:'🔒'}</div>
+      <div class="t">${sp.totem.n}</div>
+      <div class="dim" style="font-size:9px">${sp.emoji} ${sp.nombre}</div>
+    </div>`;
+  }).join('')}</div>
   <h2 class="sec" style="font-size:15px">ROPERO <span>STREET</span> 🎽 <span class="dim" style="font-size:11px;font-style:normal">tienes ${p.hojas} 🍃</span></h2>
   <div class="grid3">`;
   Object.entries(ITEMS).forEach(([k,it])=>{
