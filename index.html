@@ -228,6 +228,9 @@ const MASCOTAS = {
 };
 const LAZO=[0,50,150,350,700];
 const LAZO_NOM=['Conocidos','Compas','Cuates','Inseparables','Nahual'];
+const REQ_AMIGO=3; // árboles plantados de una especie para que su animal sea tu compa
+function cuentaEspecie(k){ return S.trees.filter(t=>t.especie===k).length; }
+function amigoDisponible(k){ return !!S.player.pets[k] || cuentaEspecie(k)>=REQ_AMIGO; }
 function petActiva(){ const k=S.player&&S.player.petActivo; return (k&&S.player.pets&&S.player.pets[k])?{k,info:MASCOTAS[k],...S.player.pets[k]}:null; }
 function lazoNivel(bond){ let n=1; LAZO.forEach((x,i)=>{ if(bond>=x) n=i+1; }); return n; }
 function petHambre(p){ if(!p.fed) return 9; return Math.round((new Date(dayStr())-new Date(p.fed))/DAY); }
@@ -543,20 +546,24 @@ function alimentar(){
   save(); toast(`${pa.info.e} ¡Ñam ñam! +10 de lazo 🐾`); render();
 }
 function mascotaPicker(){
-  if(!S.player.totems.length){ toast('🪶 Gana tu primer tótem plantando un árbol'); return; }
   openModal(`<h2 class="sec">🐾 ELIGE TU <span>COMPA</span></h2>
-    <p style="font-size:13px;margin:8px 0">Cualquier tótem ganado puede acompañarte. Cada animal guarda su propio lazo contigo — puedes cambiar cuando quieras sin perder el avance.</p>
-    ${S.player.totems.map(k=>{
+    <p style="font-size:13px;margin:8px 0">Un animal se vuelve tu compa cuando plantas <b>${REQ_AMIGO} árboles de su especie</b> — se gana con dedicación. Cada compa guarda su propio lazo contigo para siempre.</p>
+    ${Object.keys(MASCOTAS).map(k=>{
       const m=MASCOTAS[k], pd=S.player.pets[k], nv=pd?lazoNivel(pd.bond):0;
+      const disp=amigoDisponible(k), cnt=Math.min(cuentaEspecie(k),REQ_AMIGO);
+      if(!disp) return `<div style="background:var(--panel2);border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:10px;margin-bottom:8px;opacity:.45">
+        <span style="font-size:28px;filter:grayscale(1)">${m.e}</span>
+        <div style="flex:1"><b>${m.n}</b><div class="dim" style="font-size:11px">🔒 Planta ${REQ_AMIGO} ${SPECIES[k].nombre.toLowerCase()}s (${cnt}/${REQ_AMIGO})</div></div>
+      </div>`;
       return `<div style="background:var(--panel2);border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:10px;margin-bottom:8px${S.player.petActivo===k?';border:1px solid var(--neon)':''}">
         <span style="font-size:28px">${m.e}</span>
-        <div style="flex:1"><b>${m.n}</b>${pd?` <span class="dim">· Lazo ${nv} ${LAZO_NOM[nv-1]}</span>`:''}<div class="dim" style="font-size:11px">${m.boost}</div></div>
+        <div style="flex:1"><b>${pd&&pd.nombre?esc(pd.nombre)+' el ':''}${m.n}</b>${pd?` <span class="dim">· Lazo ${nv} ${LAZO_NOM[nv-1]}</span>`:''}<div class="dim" style="font-size:11px">${m.boost}</div></div>
         ${S.player.petActivo===k?'<b style="color:var(--neon);font-size:11px">ACTIVO</b>':`<button class="btn sm" onclick="elegirMascota('${k}')">ELEGIR</button>`}
       </div>`;
     }).join('')}`);
 }
 function elegirMascota(k){
-  if(!S.player.totems.includes(k)) return;
+  if(!amigoDisponible(k)) return;
   // Lealtad: solo un cambio de compa por semana
   if(S.player.petActivo && S.player.petActivo!==k && S.player.petSwitch){
     const dias=7-Math.floor((Date.now()-S.player.petSwitch)/DAY);
@@ -676,6 +683,8 @@ function doPlant(){
   const sp=plantSp;
   TAB='arboles'; render();
   if(nuevoTotem) setTimeout(()=>{ toast(`${SPECIES[sp].totem.e} ¡NUEVO TÓTEM: ${SPECIES[sp].totem.n.toUpperCase()}!`); totemCard(sp); }, 900);
+  else if(cuentaEspecie(sp)===REQ_AMIGO && !S.player.pets[sp])
+    setTimeout(()=>{ toast(`${MASCOTAS[sp].e} ¡${MASCOTAS[sp].n.toUpperCase()} QUIERE SER TU COMPA! Ve a MI MONO 🐾`); }, 900);
 }
 
 /* ================= TÓTEMS ================= */
@@ -1306,8 +1315,12 @@ function vMono(){
   </div>
   ${(()=>{
     const pa=petActiva();
-    if(!S.player.totems.length) return `<div class="card" style="display:flex;align-items:center;gap:12px"><div style="font-size:32px;filter:grayscale(1)">🐾</div><div style="flex:1"><b>Mi Mascota</b><div class="dim" style="font-size:11px">Planta tu primer árbol para ganar un tótem — ese animal podrá acompañarte como tu compa tamagotchi.</div></div></div>`;
-    if(!pa) return `<div class="card" style="display:flex;align-items:center;gap:12px"><div style="font-size:32px">🐾</div><div style="flex:1"><b>Mi Mascota</b><div class="dim" style="font-size:11px">Tienes ${S.player.totems.length} tótem${S.player.totems.length>1?'s':''} que puede${S.player.totems.length>1?'n':''} ser tu compa.</div></div><button class="btn sm" onclick="mascotaPicker()">ELEGIR</button></div>`;
+    const disponibles=Object.keys(MASCOTAS).filter(k=>amigoDisponible(k));
+    if(!pa && !disponibles.length){
+      const mejor=Object.keys(MASCOTAS).map(k=>({k,c:cuentaEspecie(k)})).sort((a,b)=>b.c-a.c)[0];
+      return `<div class="card" style="display:flex;align-items:center;gap:12px"><div style="font-size:32px;filter:grayscale(1)">🐾</div><div style="flex:1"><b>Mi Mascota</b><div class="dim" style="font-size:11px">Planta ${REQ_AMIGO} árboles de una especie y su animal se volverá tu compa tamagotchi.${mejor&&mejor.c?` Vas ${mejor.c}/${REQ_AMIGO} con ${SPECIES[mejor.k].nombre}.`:''}</div></div><button class="btn sm ghost" onclick="mascotaPicker()">VER</button></div>`;
+    }
+    if(!pa) return `<div class="card" style="display:flex;align-items:center;gap:12px"><div style="font-size:32px">🐾</div><div style="flex:1"><b>Mi Mascota</b><div class="dim" style="font-size:11px">¡Ya desbloqueaste ${disponibles.length} compa${disponibles.length>1?'s':''}! Elige quién te acompaña.</div></div><button class="btn sm" onclick="mascotaPicker()">ELEGIR</button></div>`;
     const est=petEstado(pa), nv=lazoNivel(pa.bond);
     const next=LAZO[nv]||null;
     const pct=next?Math.min(100,(pa.bond-LAZO[nv-1])/(next-LAZO[nv-1])*100):100;
