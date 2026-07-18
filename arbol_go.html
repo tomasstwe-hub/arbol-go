@@ -117,6 +117,14 @@ label{font-size:11px;font-weight:800;color:var(--dim);text-transform:uppercase;l
 .heart{position:absolute;bottom:30%;font-size:20px;animation:floatheart 1.3s ease-out forwards;pointer-events:none}
 @keyframes floatheart{0%{transform:translateY(0) scale(.6);opacity:1}100%{transform:translateY(-90px) scale(1.4);opacity:0}}
 #petFace.bounce{animation:mbounce .5s}
+.petfx{position:absolute;top:18%;left:50%;font-weight:900;font-style:italic;font-size:16px;color:var(--yellow);text-shadow:0 0 8px rgba(0,0,0,.8);animation:floatheart 1.2s ease-out forwards;pointer-events:none;white-space:nowrap}
+@keyframes aullar{0%{transform:rotate(0)}25%{transform:rotate(-24deg) translateY(-8px)}70%{transform:rotate(-24deg) translateY(-8px)}100%{transform:rotate(0)}}
+@keyframes brinco{0%,100%{transform:translateY(0) scaleY(1)}30%{transform:translateY(-28px) scaleY(1.08)}50%{transform:translateY(-32px)}80%{transform:translateY(0) scaleY(.85)}}
+@keyframes vuelta{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+@keyframes cuernos{0%,100%{transform:translateX(0)}20%{transform:translateX(-7px) rotate(-8deg)}40%{transform:translateX(7px) rotate(8deg)}60%{transform:translateX(-5px) rotate(-5deg)}80%{transform:translateX(5px) rotate(5deg)}}
+@keyframes zumbido{0%,100%{transform:translate(0,0)}25%{transform:translate(10px,-8px)}50%{transform:translate(0,-16px)}75%{transform:translate(-10px,-8px)}}
+@keyframes aleteo{0%,100%{transform:translate(0,0)}20%{transform:translate(-2px,-4px)}40%{transform:translate(2px,-7px)}60%{transform:translate(-2px,-5px)}80%{transform:translate(2px,-2px)}}
+@keyframes colazo{0%,100%{transform:rotate(0)}15%{transform:rotate(16deg)}35%{transform:rotate(-16deg)}55%{transform:rotate(12deg)}75%{transform:rotate(-12deg)}}
 .sticker{position:absolute;font-size:11px;font-weight:900;font-style:italic;padding:3px 10px;border-radius:8px;transform:rotate(4deg)}
 .center{text-align:center}
 .dim{color:var(--dim);font-size:12px}
@@ -231,14 +239,27 @@ const ITEMS = {
 
 // Mascotas tamagotchi: cada tótem ganado puede acompañarte y da un poder según su lazo
 const MASCOTAS = {
-  mezquite:  {e:'🐺', n:'Coyote',      b:'plantar',    boost:'Al plantar: +3 🍃 por nivel de lazo'},
-  paloverde: {e:'🐇', n:'Liebre',      b:'regar',      boost:'Al regar: +2 XP por nivel de lazo'},
-  guamuchil: {e:'🦎', n:'Iguana',      b:'checkin',    boost:'En check-ins: +2 XP por nivel de lazo'},
-  palofierro:{e:'🦌', n:'Venado Bura', b:'ronda',      boost:'Chambas de ronda: +2 XP de equipo por nivel'},
-  guayacan:  {e:'🐝', n:'Abeja',       b:'trivia',     boost:'Trivia correcta: +1 🍃 por nivel de lazo'},
-  amapa:     {e:'🐦', n:'Colibrí',     b:'meta',       boost:'Meta diaria: +2 🍃 por nivel de lazo'},
-  alamo:     {e:'🦫', n:'Castor',      b:'regarHojas', boost:'Al regar: +2 🍃 por nivel de lazo'}
+  mezquite:  {e:'🐺', n:'Coyote',      b:'plantar',    boost:'Al plantar: +3 🍃 por nivel de lazo',        act:{a:'aullar', d:1000, fx:'¡AUUUUU! 🌙'}},
+  paloverde: {e:'🐇', n:'Liebre',      b:'regar',      boost:'Al regar: +2 XP por nivel de lazo',         act:{a:'brinco', d:700,  fx:'¡boing! 💨'}},
+  guamuchil: {e:'🦎', n:'Iguana',      b:'checkin',    boost:'En check-ins: +2 XP por nivel de lazo',     act:{a:'vuelta', d:800,  fx:'¡vueltota! 🌀'}},
+  palofierro:{e:'🦌', n:'Venado Bura', b:'ronda',      boost:'Chambas de ronda: +2 XP de equipo por nivel',act:{a:'cuernos',d:900,  fx:'¡chas chas! 🌿'}},
+  guayacan:  {e:'🐝', n:'Abeja',       b:'trivia',     boost:'Trivia correcta: +1 🍃 por nivel de lazo',  act:{a:'zumbido',d:900,  fx:'bzzz bzzz 🎵'}},
+  amapa:     {e:'🐦', n:'Colibrí',     b:'meta',       boost:'Meta diaria: +2 🍃 por nivel de lazo',      act:{a:'aleteo', d:600,  fx:'¡brrrrr! ✨'}},
+  alamo:     {e:'🦫', n:'Castor',      b:'regarHojas', boost:'Al regar: +2 🍃 por nivel de lazo',         act:{a:'colazo', d:900,  fx:'¡splash! 💦'}}
 };
+function actuarPet(conFx){
+  const pa=petActiva(); if(!pa||!pa.info.act) return;
+  const el=document.getElementById('petFace'); if(!el) return;
+  const act=pa.info.act;
+  el.style.animation='none'; void el.offsetWidth;
+  el.style.animation=`${act.a} ${act.d}ms ease`;
+  setTimeout(()=>{ if(el) el.style.animation=''; }, act.d+50);
+  if(conFx!==false){
+    const host=document.getElementById('petCard');
+    if(host){ const f=document.createElement('span'); f.className='petfx'; f.textContent=act.fx;
+      f.style.marginLeft=(-30+Math.random()*20)+'px'; host.appendChild(f); setTimeout(()=>f.remove(),1300); }
+  }
+}
 const LAZO=[0,50,150,350,700];
 const LAZO_NOM=['Conocidos','Compas','Cuates','Inseparables','Nahual'];
 const REQ_AMIGO=3; // árboles plantados de una especie para que su animal sea tu compa
@@ -279,15 +300,19 @@ function apapachar(){
   const pa=petActiva(); if(!pa) return;
   const p=S.player.pets[pa.k];
   if(!p.car || p.car.d!==dayStr()) p.car={d:dayStr(), n:0};
-  // corazones flotando
+  // el acto propio de cada especie + corazones
+  actuarPet(true);
   const host=document.getElementById('petCard');
   if(host){ for(let i=0;i<3;i++){ const h=document.createElement('span'); h.className='heart'; h.textContent='❤️';
     h.style.left=(30+Math.random()*60)+'%'; h.style.animationDelay=(i*0.15)+'s'; host.appendChild(h); setTimeout(()=>h.remove(),1400); } }
   if(p.car.n>=3){ toast(`${pa.info.e} ${fraseCompa(pa)} · 💤 Ya me apapachaste mucho hoy`); return; }
   p.car.n++; p.bond+=2; save();
   toast(`${pa.info.e} ${fraseCompa(pa)} · +2 lazo (caricia ${p.car.n}/3)`);
-  const el=document.getElementById('petFace'); if(el){ el.classList.remove('bounce'); void el.offsetWidth; el.classList.add('bounce'); }
 }
+// De vez en cuando el compa hace su gracia solito
+setInterval(()=>{
+  if(S.player && TAB==='mono' && !$('#modal').classList.contains('open') && Math.random()<0.6) actuarPet(false);
+}, 11000);
 
 function dayStr(d){ d=d||new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function yesterdayStr(){ const d=new Date(); d.setDate(d.getDate()-1); return dayStr(d); }
@@ -1674,7 +1699,7 @@ function vMono(){
         <button class="btn sm pink" onclick="apapachar()">${'❤️'.repeat(car)}${'🤍'.repeat(Math.max(0,3-car))} APAPACHAR</button>
         <button class="btn sm ghost" onclick="mascotaPicker()">🔄</button>
       </div>
-      <p class="dim" style="font-size:10px;margin-top:6px;text-align:left">Tócalo para que te hable · Cambiar de compa: 1 vez por semana (lealtad ante todo 🐾)</p>
+      <p class="dim" style="font-size:10px;margin-top:6px;text-align:left">Tócalo: hace su gracia y te habla · Cambiar de compa: 1 vez por semana (lealtad ante todo 🐾)</p>
     </div>`;
   })()}
   ${(()=>{ const tv=(p.trivia&&p.trivia.date===dayStr())?p.trivia.done:0;
