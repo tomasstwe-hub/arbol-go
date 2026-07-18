@@ -4,6 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>ÁRBOL GO · Street Forest</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0d0f12">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
@@ -966,6 +971,10 @@ else if(!S.player) onboarding();
 setInterval(()=>{
   if(S.player && (TAB==='arboles'||TAB==='mono') && !$('#modal').classList.contains('open')) render();
 }, 180000);
+// PWA: instalar service worker (solo en web, no en archivo local)
+if('serviceWorker' in navigator && location.protocol.indexOf('http')===0){
+  navigator.serviceWorker.register('sw.js').catch(()=>{});
+}
 </script>
 </body>
 </html>
