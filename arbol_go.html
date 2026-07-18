@@ -204,6 +204,28 @@ const ITEMS = {
   corona:     {n:'Corona Leyenda',   e:'👑', p:1000, slot:'cap',    lvl:6}
 };
 
+// Mascotas tamagotchi: cada tótem ganado puede acompañarte y da un poder según su lazo
+const MASCOTAS = {
+  mezquite:  {e:'🐺', n:'Coyote',      b:'plantar',    boost:'Al plantar: +3 🍃 por nivel de lazo'},
+  paloverde: {e:'🐇', n:'Liebre',      b:'regar',      boost:'Al regar: +2 XP por nivel de lazo'},
+  guamuchil: {e:'🦎', n:'Iguana',      b:'checkin',    boost:'En check-ins: +2 XP por nivel de lazo'},
+  palofierro:{e:'🦌', n:'Venado Bura', b:'ronda',      boost:'Chambas de ronda: +2 XP de equipo por nivel'},
+  guayacan:  {e:'🐝', n:'Abeja',       b:'trivia',     boost:'Trivia correcta: +1 🍃 por nivel de lazo'},
+  amapa:     {e:'🐦', n:'Colibrí',     b:'meta',       boost:'Meta diaria: +2 🍃 por nivel de lazo'},
+  alamo:     {e:'🦫', n:'Castor',      b:'regarHojas', boost:'Al regar: +2 🍃 por nivel de lazo'}
+};
+const LAZO=[0,50,150,350,700];
+const LAZO_NOM=['Conocidos','Compas','Cuates','Inseparables','Nahual'];
+function petActiva(){ const k=S.player&&S.player.petActivo; return (k&&S.player.pets&&S.player.pets[k])?{k,info:MASCOTAS[k],...S.player.pets[k]}:null; }
+function lazoNivel(bond){ let n=1; LAZO.forEach((x,i)=>{ if(bond>=x) n=i+1; }); return n; }
+function petHambre(p){ if(!p.fed) return 9; return Math.round((new Date(dayStr())-new Date(p.fed))/DAY); }
+function petEstado(p){ const d=petHambre(p); return d<=1?'feliz':(d<=2?'hambriento':'triste'); }
+function petBoost(tipo){
+  const p=petActiva();
+  if(!p || p.info.b!==tipo || petEstado(p)!=='feliz') return 0;
+  return lazoNivel(p.bond);
+}
+
 function dayStr(d){ d=d||new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function yesterdayStr(){ const d=new Date(); d.setDate(d.getDate()-1); return dayStr(d); }
 function initGear(p){
@@ -213,6 +235,8 @@ function initGear(p){
   p.lastDay = p.lastDay||null;
   p.dayXP = p.dayXP||0; p.dayDate = p.dayDate||dayStr();
   p.totems = p.totems||[];
+  p.pets = p.pets||{};
+  p.petActivo = p.petActivo||null;
 }
 
 /* ================= ESTADO ================= */
@@ -314,7 +338,16 @@ function addXP(xp, hojas){
   if(S.player.dayXP>=META_DIA && S.player.lastDay!==dayStr()){
     S.player.strk = (S.player.lastDay===yesterdayStr()) ? S.player.strk+1 : 1;
     S.player.lastDay = dayStr(); S.player.strkLost=false;
-    setTimeout(()=>toast(`🔥 ¡META DEL DÍA! Racha: ${S.player.strk} día${S.player.strk>1?'s':''}`),400);
+    const bm=petBoost('meta')*2; if(bm) S.player.hojas+=bm;
+    setTimeout(()=>toast(`🔥 ¡META DEL DÍA! Racha: ${S.player.strk} día${S.player.strk>1?'s':''}${bm?` · 🐦 +${bm}🍃 del colibrí`:''}`),400);
+  }
+  // La mascota gana lazo con todo lo que haces (si no está triste)
+  const pa=petActiva();
+  if(pa && petEstado(pa)!=='triste'){
+    const antes=lazoNivel(S.player.pets[pa.k].bond);
+    S.player.pets[pa.k].bond += Math.max(1, Math.round(xp/10));
+    const desp=lazoNivel(S.player.pets[pa.k].bond);
+    if(desp>antes) setTimeout(()=>toast(`${pa.info.e} ¡LAZO NIVEL ${desp}: ${LAZO_NOM[desp-1].toUpperCase()}! Su poder creció 🐾`),1200);
   }
   const after = levelOf(S.player.xp);
   if(after>before) setTimeout(()=>toast(`⬆️ ¡SUBISTE A ${LEVELS[after].t.toUpperCase()} ${LEVELS[after].e}! Tu mono evolucionó 😎`),900);
@@ -426,19 +459,51 @@ function regar(id){
   t.riegos.push({f:Date.now()});
   S.player.racha=(S.player.racha||0)+1;
   const cur=guardiaDe(t);
+  const bxp=petBoost('regar')*2, bhj=petBoost('regarHojas')*2, beq=petBoost('ronda')*2;
+  const pboost=(bxp||bhj)?` · 🐾 +${bxp?bxp+' XP':''}${bxp&&bhj?' ':''}${bhj?bhj+'🍃':''} de tu mascota`:'';
   if(cur===S.player.name){
-    t.teamXP=(t.teamXP||0)+10;
-    addXP(XP_RIEGO+10, HJ_RIEGO+5);
-    toast(`💧 ¡CHAMBA DE REGADOR CUMPLIDA! +${XP_RIEGO+10} XP +${HJ_RIEGO+5}🍃 · +10 XP de equipo 🤝🔥`);
+    t.teamXP=(t.teamXP||0)+10+beq;
+    addXP(XP_RIEGO+10+bxp, HJ_RIEGO+5+bhj);
+    toast(`💧 ¡CHAMBA DE REGADOR CUMPLIDA! +${XP_RIEGO+10+bxp} XP +${HJ_RIEGO+5+bhj}🍃 · +${10+beq} XP de equipo 🤝🔥${pboost}`);
   } else if(cur){
     t.teamXP=(t.teamXP||0)+5;
-    addXP(XP_RIEGO, HJ_RIEGO);
-    toast(`💧 +${XP_RIEGO} XP +${HJ_RIEGO}🍃 · Esta semana riega ${cur}, ¡gracias por el apoyo! 🤝`);
+    addXP(XP_RIEGO+bxp, HJ_RIEGO+bhj);
+    toast(`💧 +${XP_RIEGO+bxp} XP +${HJ_RIEGO+bhj}🍃 · Esta semana riega ${cur}, ¡gracias por el apoyo! 🤝${pboost}`);
   } else {
-    addXP(XP_RIEGO, HJ_RIEGO);
-    toast(`💧 +${XP_RIEGO} XP +${HJ_RIEGO}🍃 · Racha x${S.player.racha} 🔥`);
+    addXP(XP_RIEGO+bxp, HJ_RIEGO+bhj);
+    toast(`💧 +${XP_RIEGO+bxp} XP +${HJ_RIEGO+bhj}🍃 · Racha x${S.player.racha} 🔥${pboost}`);
   }
   save(); render();
+}
+
+/* ================= MASCOTA TAMAGOTCHI ================= */
+function alimentar(){
+  const pa=petActiva(); if(!pa) return;
+  const p=S.player.pets[pa.k];
+  if(p.fed===dayStr()){ toast(`${pa.info.e} Ya comió hoy — mañana le toca de nuevo 🍖`); return; }
+  p.fed=dayStr(); p.bond+=10;
+  save(); toast(`${pa.info.e} ¡Ñam ñam! +10 de lazo 🐾`); render();
+}
+function mascotaPicker(){
+  if(!S.player.totems.length){ toast('🪶 Gana tu primer tótem plantando un árbol'); return; }
+  openModal(`<h2 class="sec">🐾 ELIGE TU <span>COMPA</span></h2>
+    <p style="font-size:13px;margin:8px 0">Cualquier tótem ganado puede acompañarte. Cada animal guarda su propio lazo contigo — puedes cambiar cuando quieras sin perder el avance.</p>
+    ${S.player.totems.map(k=>{
+      const m=MASCOTAS[k], pd=S.player.pets[k], nv=pd?lazoNivel(pd.bond):0;
+      return `<div style="background:var(--panel2);border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:10px;margin-bottom:8px${S.player.petActivo===k?';border:1px solid var(--neon)':''}">
+        <span style="font-size:28px">${m.e}</span>
+        <div style="flex:1"><b>${m.n}</b>${pd?` <span class="dim">· Lazo ${nv} ${LAZO_NOM[nv-1]}</span>`:''}<div class="dim" style="font-size:11px">${m.boost}</div></div>
+        ${S.player.petActivo===k?'<b style="color:var(--neon);font-size:11px">ACTIVO</b>':`<button class="btn sm" onclick="elegirMascota('${k}')">ELEGIR</button>`}
+      </div>`;
+    }).join('')}`);
+}
+function elegirMascota(k){
+  if(!S.player.totems.includes(k)) return;
+  if(!S.player.pets[k]) S.player.pets[k]={bond:0, fed:dayStr()};
+  S.player.petActivo=k;
+  save(); closeModal();
+  toast(`${MASCOTAS[k].e} ¡${MASCOTAS[k].n} es tu nuevo compa! Aliméntalo diario 🐾`);
+  render();
 }
 
 function checkin(id){
@@ -458,10 +523,11 @@ function doCheckin(id){
   const f = $('#ft').files[0];
   const esVigia = rolDe(t,S.player.name)==='📸 Vigilante';
   const fin = ()=>{
-    if(esVigia){ t.teamXP=(t.teamXP||0)+10; addXP(XP_CHECKIN+10,10); }
-    else addXP(XP_CHECKIN,5);
+    const bc=petBoost('checkin')*2, beq=petBoost('ronda')*2;
+    if(esVigia){ t.teamXP=(t.teamXP||0)+10+beq; addXP(XP_CHECKIN+10+bc,10); }
+    else addXP(XP_CHECKIN+bc,5);
     save(); closeModal();
-    toast(esVigia?`📸 ¡CHAMBA DE VIGILANTE CUMPLIDA! +${XP_CHECKIN+10} XP · +10 XP de equipo 🤝`:`📸 +${XP_CHECKIN} XP · Monitoreo registrado`);
+    toast(esVigia?`📸 ¡CHAMBA DE VIGILANTE CUMPLIDA! +${XP_CHECKIN+10+bc} XP · +${10+beq} XP de equipo 🤝${bc?' · 🦎🐾':''}`:`📸 +${XP_CHECKIN+bc} XP · Monitoreo registrado${bc?' · 🦎 +'+bc+' XP de tu iguana 🐾':''}`);
     render();
   };
   if(f){
@@ -526,7 +592,8 @@ function doPlant(){
   S.player.creditos--;
   const nuevoTotem = !S.player.totems.includes(plantSp);
   if(nuevoTotem) S.player.totems.push(plantSp);
-  addXP(XP_PLANT+(nuevoTotem?25:0), HJ_PLANT+(nuevoTotem?15:0));
+  const bp=petBoost('plantar')*3;
+  addXP(XP_PLANT+(nuevoTotem?25:0), HJ_PLANT+(nuevoTotem?15:0)+bp);
   plantLoc=null;
   save();
   toast(`🌱 +${XP_PLANT+(nuevoTotem?25:0)} XP +${HJ_PLANT+(nuevoTotem?15:0)}🍃 · ¡${nom} está en el mapa!`);
@@ -734,7 +801,7 @@ function adoptarArbol(){
 /* ================= COMPARTIR MONO ================= */
 function monoShareURL(){
   const p=S.player;
-  const d={p:p.name, av:p.avatar, xp:p.xp, sk:p.strk||0, g:p.gear, a:S.trees.length,
+  const d={p:p.name, av:p.avatar, xp:p.xp, sk:p.strk||0, g:p.gear, a:S.trees.length, pe:p.petActivo||null,
     r:S.trees.reduce((x,t)=>x+t.riegos.length,0), c:+S.trees.reduce((x,t)=>x+co2Of(t),0).toFixed(1)};
   return PUB+'#m='+btoa(unescape(encodeURIComponent(JSON.stringify(d))));
 }
@@ -751,7 +818,7 @@ function visitorMonoHash(){
   try{
     const d=JSON.parse(decodeURIComponent(escape(atob(location.hash.slice(3)))));
     const lv=levelOf(d.xp||0);
-    const fake={name:d.p, avatar:d.av||'🦌', gear:d.g||{}, xp:d.xp||0};
+    const fake={name:d.p, avatar:d.av||'🦌', gear:d.g||{}, xp:d.xp||0, petActivo:d.pe||null};
     let comp='';
     if(S.player){
       const miLv=levelOf(S.player.xp), gano=(S.player.strk||0)>=(d.sk||0);
@@ -831,7 +898,7 @@ function triviaQ(){
 function triviaAns(j){
   const t=TRIVIA[tState.idx[tState.i]], ok=(j===t.a);
   S.player.trivia.done++; if(ok) S.player.trivia.ok++;
-  addXP(ok?10:2, ok?5:0); save();
+  addXP(ok?10:2, ok?5+petBoost('trivia'):0); save();
   const last=tState.i>=2;
   openModal(`<div class="center" style="font-size:44px">${ok?'✅':'❌'}</div>
     <p class="center" style="font-weight:900;margin:8px 0">${ok?'¡CORRECTO! +10 XP +5 🍃':'Casi... la buena era: '+t.o[t.a]+' (+2 XP por aprender)'}</p>
@@ -1029,6 +1096,8 @@ function monoSVG(pl, forceMood){
   if(it('phones')) s+=`<path d="M69,86 Q69,48 100,48 Q131,48 131,86" stroke="#ff2e88" stroke-width="5" fill="none"/><rect x="63" y="80" width="10" height="16" rx="4" fill="#ff2e88"/><rect x="127" y="80" width="10" height="16" rx="4" fill="#ff2e88"/>`;
   // Mascota
   if(it('pet')) s+=`<text x="162" y="222" font-size="26" text-anchor="middle">🐕</text>`;
+  const mk=p.petActivo&&MASCOTAS[p.petActivo];
+  if(mk) s+=`<text x="34" y="206" font-size="26" text-anchor="middle">${mk.e}</text>`;
   return s+`</svg>`;
 }
 function monoTap(){
@@ -1050,6 +1119,33 @@ function vMono(){
     <p class="dim" style="margin-bottom:10px">Toca a tu mono para que te hable · Gana ${META_DIA} XP diarios o pierdes la racha 🔥</p>
     <button class="btn sm pink" onclick="compartirMono()" style="margin-bottom:14px">📣 PRESUMIR MI MONO</button>
   </div>
+  ${(()=>{
+    const pa=petActiva();
+    if(!S.player.totems.length) return `<div class="card" style="display:flex;align-items:center;gap:12px"><div style="font-size:32px;filter:grayscale(1)">🐾</div><div style="flex:1"><b>Mi Mascota</b><div class="dim" style="font-size:11px">Planta tu primer árbol para ganar un tótem — ese animal podrá acompañarte como tu compa tamagotchi.</div></div></div>`;
+    if(!pa) return `<div class="card" style="display:flex;align-items:center;gap:12px"><div style="font-size:32px">🐾</div><div style="flex:1"><b>Mi Mascota</b><div class="dim" style="font-size:11px">Tienes ${S.player.totems.length} tótem${S.player.totems.length>1?'s':''} que puede${S.player.totems.length>1?'n':''} ser tu compa.</div></div><button class="btn sm" onclick="mascotaPicker()">ELEGIR</button></div>`;
+    const est=petEstado(pa), nv=lazoNivel(pa.bond);
+    const next=LAZO[nv]||null;
+    const pct=next?Math.min(100,(pa.bond-LAZO[nv-1])/(next-LAZO[nv-1])*100):100;
+    const carita=est==='feliz'?'💚':est==='hambriento'?'🍖':'💔';
+    const estTxt=est==='feliz'?'Feliz y con poder activo':est==='hambriento'?'¡Tiene hambre! Aliméntalo o pierde su poder':'Triste y sin poder… dale de comer 🥺';
+    const comioHoy=S.player.pets[pa.k].fed===dayStr();
+    return `<div class="card">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="font-size:38px">${pa.info.e}${carita}</div>
+        <div style="flex:1;text-align:left">
+          <b>${pa.info.n}</b> <span class="dim">· Lazo ${nv}: ${LAZO_NOM[nv-1]}</span>
+          <div class="xpbar"><i style="width:${pct}%"></i></div>
+          <div class="dim" style="font-size:10px">${pa.bond} lazo${next?` · faltan ${next-pa.bond} para nivel ${nv+1}`:' · ¡NAHUAL! nivel máximo'}</div>
+          <div style="font-size:11px;color:${est==='feliz'?'var(--neon)':est==='hambriento'?'var(--yellow)':'var(--bad)'}">${estTxt}</div>
+          <div class="dim" style="font-size:10px">⚡ ${pa.info.boost}</div>
+        </div>
+      </div>
+      <div class="trow">
+        <button class="btn sm" ${comioHoy?'disabled':''} onclick="alimentar()">${comioHoy?'✅ COMIÓ HOY':'🍖 ALIMENTAR (+10 lazo)'}</button>
+        <button class="btn sm ghost" onclick="mascotaPicker()">🔄 CAMBIAR</button>
+      </div>
+    </div>`;
+  })()}
   ${(()=>{ const tv=(p.trivia&&p.trivia.date===dayStr())?p.trivia.done:0;
   return `<div class="card" style="display:flex;align-items:center;gap:12px;text-align:left">
     <div style="font-size:32px">🧠</div>
