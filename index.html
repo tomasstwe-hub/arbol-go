@@ -249,6 +249,12 @@ function levelOf(xp){ let i=0; LEVELS.forEach((l,k)=>{ if(xp>=l.xp) i=k; }); ret
 
 function lastRiego(t){ return t.riegos.length ? t.riegos[t.riegos.length-1].f : t.fecha; }
 
+function guardiaDe(t){
+  if(!t.ronda || !t.ronda.g || !t.ronda.g.length) return null;
+  const sem = Math.floor((Date.now()-t.ronda.i)/(7*DAY));
+  return t.ronda.g[((sem % t.ronda.g.length)+t.ronda.g.length) % t.ronda.g.length];
+}
+
 function statusOf(t){
   const sp = SPECIES[t.especie];
   const need = sp.riego * SEASON[new Date().getMonth()];
@@ -365,6 +371,7 @@ function vArboles(){
         <div style="flex:1">
           <div class="nm">${esc(t.nombre)} <span class="dim" style="font-weight:400">· ${sp.nombre}</span></div>
           <div class="meta">🕐 ${fmtDias(age)} · 💧 ${t.riegos.length} riegos · último hace ${fmtDias((Date.now()-lastRiego(t))/DAY)}</div>
+          ${guardiaDe(t)?`<div class="meta">🤝 Esta semana cuida: <b style="color:var(--cyan)">${esc(guardiaDe(t))}</b></div>`:''}
           <span class="tag ${st.k}">${st.txt}</span>
         </div>
       </div>
@@ -375,6 +382,7 @@ function vArboles(){
         <button class="btn sm pink" onclick="checkin(${t.id})">📸 CHECK-IN</button>
         <button class="btn sm ghost" onclick="toggleDetail(${t.id})">📊 STATS</button>
         <button class="btn sm ghost" onclick="placaQR(${t.id})">🏷️ QR</button>
+        <button class="btn sm ghost" onclick="rondaModal(${t.id})">🤝 RONDA</button>
       </div>
       <div class="detail" id="det${t.id}" style="display:none">
         ☀️ Horas de luz: <b>${cl.luz.toLocaleString()} h</b> &nbsp; 🥵 Horas de calor (+35°C): <b>${cl.calor.toLocaleString()} h</b> &nbsp; 🥶 Horas frío (-7°C): <b>${cl.frio} h</b><br>
@@ -400,8 +408,12 @@ function regar(id){
   if(st.ratio<0.7){ toast(`💧 Aún no toca — riega ${esperaRiego(t).toLowerCase()}. ¡No lo ahogues! 😅`); return; }
   t.riegos.push({f:Date.now()});
   S.player.racha=(S.player.racha||0)+1;
-  addXP(XP_RIEGO, HJ_RIEGO);
-  toast(`💧 +${XP_RIEGO} XP +${HJ_RIEGO}🍃 · Racha x${S.player.racha} 🔥`);
+  const cur=guardiaDe(t);
+  const bonoRonda = cur===S.player.name ? 5 : 0;
+  addXP(XP_RIEGO, HJ_RIEGO+bonoRonda);
+  if(bonoRonda) toast(`💧 +${XP_RIEGO} XP +${HJ_RIEGO+bonoRonda}🍃 · ¡Riego de tu ronda! 🤝🔥`);
+  else if(cur) toast(`💧 +${XP_RIEGO} XP +${HJ_RIEGO}🍃 · Esta semana le tocaba a ${cur} — ¡gracias por el apoyo! 🤝`);
+  else toast(`💧 +${XP_RIEGO} XP +${HJ_RIEGO}🍃 · Racha x${S.player.racha} 🔥`);
   save(); render();
 }
 
@@ -524,7 +536,7 @@ function usarTotem(k){
 
 /* ================= PLACA QR ================= */
 function qrPayload(t){
-  const d={n:t.nombre,e:t.especie,f:t.fecha,la:+t.lat.toFixed(5),lo:+t.lng.toFixed(5),p:S.player.name,av:S.player.avatar};
+  const d={n:t.nombre,e:t.especie,f:t.fecha,la:+t.lat.toFixed(5),lo:+t.lng.toFixed(5),p:S.player.name,av:S.player.avatar,ro:t.ronda||null};
   return PUB+'#a='+btoa(unescape(encodeURIComponent(JSON.stringify(d))));
 }
 function drawPlaca(t){
@@ -603,9 +615,78 @@ function visitorHash(){
       ⏳ <b>Puede vivir:</b> ${sp.vida}<br>
       📍 <a href="https://www.openstreetmap.org/?mlat=${+d.la||0}&mlon=${+d.lo||0}#map=18/${+d.la||0}/${+d.lo||0}" target="_blank" style="color:var(--cyan)">Ver su ubicación en el mapa</a>
     </div>
+    ${d.ro&&d.ro.g&&d.ro.g.length?`<div class="banner ok" style="text-align:center;margin-top:10px">🤝 Esta semana lo cuida: <b>${esc(d.ro.g[Math.floor((Date.now()-d.ro.i)/(7*DAY))%d.ro.g.length])}</b></div>`:''}
     <p style="font-size:13px;background:var(--panel2);border-radius:10px;padding:10px;margin:10px 0">${sp.totem.e} ${sp.totem.rel}</p>
     <button class="btn full" onclick="location.hash='';closeModal();">🎮 ¡QUIERO PLANTAR EL MÍO!</button>`);
   }catch(e){ location.hash=''; if(!S.player) onboarding(); }
+}
+
+/* ================= RONDAS DE CUIDADO ================= */
+function arbolShareURL(t){
+  const d={id:t.id, n:t.nombre, e:t.especie, f:t.fecha, la:+t.lat.toFixed(5), lo:+t.lng.toFixed(5), p:S.player.name, ro:t.ronda||null};
+  return PUB+'#t='+btoa(unescape(encodeURIComponent(JSON.stringify(d))));
+}
+function rondaModal(id){
+  const t=S.trees.find(x=>x.id===id);
+  if(!t.ronda) t.ronda={g:[S.player.name], i:Date.now()};
+  save();
+  const cur=guardiaDe(t);
+  const msg=`🤝 ¡Únete a la ronda de "${t.nombre}" en ÁRBOL GO! Nos turnamos por semanas para regarlo. Abre la liga y adóptalo: `;
+  openModal(`<h2 class="sec">🤝 RONDA DE <span>CUIDADO</span></h2>
+    <p style="font-size:13px;margin:8px 0">Túrnense el árbol por semanas: una semana riega uno, la siguiente el otro. La app calcula sola a quién le toca.</p>
+    <div class="banner ok" style="text-align:center">Esta semana cuida: <b>${esc(cur)}</b></div>
+    ${t.ronda.g.map((n,i)=>`<div style="background:var(--panel2);border-radius:10px;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span>${i+1}. ${esc(n)} ${n===cur?'⏰':''}</span>${t.ronda.g.length>1?`<button class="btn sm ghost" onclick="quitarGuardian(${id},${i})">✕</button>`:''}</div>`).join('')}
+    <input id="gNom" placeholder="Nombre del compa (como se llame en su juego)" maxlength="20">
+    <button class="btn full ghost" onclick="agregarGuardian(${id})">➕ AGREGAR A LA RONDA</button>
+    <br><br>
+    <a class="btn full" style="text-decoration:none;display:block;text-align:center" href="https://wa.me/?text=${encodeURIComponent(msg+arbolShareURL(t))}" target="_blank">💬 INVITAR POR WHATSAPP</a>`);
+}
+function agregarGuardian(id){
+  const t=S.trees.find(x=>x.id===id);
+  const n=$('#gNom').value.trim();
+  if(!n){ toast('⚠️ Escribe el nombre del compa'); return; }
+  if(t.ronda.g.includes(n)){ toast('⚠️ Ya está en la ronda'); return; }
+  t.ronda.g.push(n); save();
+  toast(`🤝 ${n} entró a la ronda`);
+  rondaModal(id);
+}
+function quitarGuardian(id,i){
+  const t=S.trees.find(x=>x.id===id);
+  t.ronda.g.splice(i,1); save();
+  rondaModal(id);
+}
+let _adoptar=null;
+function visitorTreeHash(){
+  try{
+    const d=JSON.parse(decodeURIComponent(escape(atob(location.hash.slice(3)))));
+    _adoptar=d;
+    const sp=SPECIES[d.e]||SPECIES.mezquite;
+    const cur=d.ro&&d.ro.g&&d.ro.g.length ? d.ro.g[Math.floor((Date.now()-d.ro.i)/(7*DAY))%d.ro.g.length] : null;
+    openModal(`<div class="center">
+      <div style="font-size:50px">${sp.emoji}</div>
+      <h2 class="sec" style="text-align:center">${esc(d.n).toUpperCase()}</h2>
+      <div class="dim">${sp.nombre} · plantado por <b>${esc(d.p)}</b></div>
+      <p style="margin:12px 0;font-size:14px">🤝 <b>${esc(d.p)} te invita a su ronda de cuidado</b><br><span class="dim">Se turnan por semanas para regarlo — el árbol queda registrado también en tu celular.</span></p>
+    </div>
+    ${cur?`<div class="banner ok" style="text-align:center">Esta semana cuida: <b>${esc(cur)}</b></div>`:''}
+    ${S.player
+      ? `<button class="btn full" onclick="adoptarArbol()">🤝 UNIRME A LA RONDA (+25 XP)</button>`
+      : `<button class="btn full" onclick="closeModal()">🎮 CREAR MI JUGADOR PRIMERO</button>`}`);
+  }catch(e){ location.hash=''; if(!S.player) onboarding(); }
+}
+function adoptarArbol(){
+  const d=_adoptar; if(!d) return;
+  if(S.trees.some(t=>t.id===d.id)){ toast('🌳 Este árbol ya está en tu crew'); }
+  else{
+    const esp = (d.e in SPECIES)?d.e:'mezquite';
+    const t={id:d.id, especie:esp, nombre:d.n, lat:+d.la||OBREGON[0], lng:+d.lo||OBREGON[1], fecha:d.f, riegos:[{f:Date.now()}], foto:null, condicion:null, ronda:d.ro||{g:[d.p],i:d.f}};
+    if(!t.ronda.g.includes(S.player.name)) t.ronda.g.push(S.player.name);
+    S.trees.push(t);
+    if(!S.player.totems.includes(esp)){ S.player.totems.push(esp); setTimeout(()=>totemCard(esp),900); }
+    addXP(25,10);
+    toast(`🤝 +25 XP · ¡Estás en la ronda de ${d.n}!`);
+  }
+  _adoptar=null; location.hash=''; save(); closeModal(); TAB='arboles'; render();
 }
 
 /* ================= COMPARTIR MONO ================= */
@@ -1002,6 +1083,8 @@ function startGame(){
     toast(`${obAv} ¡Bienvenido ${n}! Tienes 5 árboles gratis 🌳`);
     if(!STORAGE_OK) setTimeout(()=>alert('⚠️ Este navegador no deja guardar el progreso.\n\nAbre el archivo con Chrome o Safari (no en la vista previa de WhatsApp/Archivos) para que tus árboles se guarden.'),800);
     TAB='plantar'; render();
+    // Si llegó por invitación de ronda, retomarla ya con jugador creado
+    if(location.hash.startsWith('#t=')) setTimeout(visitorTreeHash, 600);
   }catch(err){
     alert('⚠️ Error al iniciar: '+err.message+'\n\nIntenta abrir el archivo con Chrome o Safari.');
   }
@@ -1011,6 +1094,7 @@ function startGame(){
 if(S.player) render();
 if(location.hash.startsWith('#a=')) visitorHash();
 else if(location.hash.startsWith('#m=')) visitorMonoHash();
+else if(location.hash.startsWith('#t=')) visitorTreeHash();
 else if(!S.player) onboarding();
 // Refrescar alertas y cuentas regresivas si la pestaña queda abierta
 setInterval(()=>{
