@@ -643,7 +643,10 @@ function vPlantar(){
     h += `<div class="card center"><div style="font-size:44px">😬</div><p style="margin:10px 0;font-weight:800">Sin créditos de árbol.</p><p class="dim">Junta 🍃 regando y monitoreando tu crew, y cámbialas en la TIENDA por más árboles.</p><br><button class="btn pink" onclick="TAB='tienda';render()">🛒 IR A LA TIENDA</button></div>`;
     $('#view').innerHTML=h; return;
   }
+  const valesPend=(S.player.vales||[]).filter(v=>!v.entregado && Date.now()<=v.exp);
   h += `<div class="banner ok">🎟️ Tienes <b>${S.player.creditos} crédito${S.player.creditos>1?'s':''}</b> de árbol. Plantar = +${XP_PLANT} XP +${HJ_PLANT}🍃</div>
+  ${valesPend.length?`<div class="card" style="display:flex;align-items:center;gap:10px"><span style="font-size:26px">🚚</span><div style="flex:1"><b>Vale pendiente: ${SPECIES[valesPend[0].especie].emoji} ${SPECIES[valesPend[0].especie].nombre}</b><div class="dim" style="font-size:11px">Folio ${valesPend[0].folio} — pasa por él a la oficina</div></div><button class="btn sm" onclick="verVale(${valesPend[0].id})">VER</button></div>`
+  :`<button class="btn sm ghost" onclick="pedirArbol()" style="margin-bottom:12px">🚚 ¿AÚN NO TIENES TU ARBOLITO? PÍDELO AQUÍ</button>`}
   <div class="card">
     <label>Especie nativa</label>
     <div class="spick" id="spick">${S.unlocked.map(k=>{const sp=SPECIES[k];return `<div class="sp ${k===plantSp?'sel':''}" data-k="${k}"><div class="e">${sp.emoji}</div><div class="n">${sp.nombre}</div><div class="s">riego c/${sp.riego}d</div></div>`;}).join('')}</div>
@@ -896,6 +899,137 @@ function adoptarArbol(){
     toast(`🤝 +25 XP · ¡Estás en la ronda de ${d.n}!`);
   }
   _adoptar=null; location.hash=''; save(); closeModal(); TAB='arboles'; render();
+}
+
+/* ================= VALES DE ÁRBOL (entrega física) ================= */
+const OFICINA='Oficina ÁRBOL GO · (pon aquí tu dirección y horario)';
+function pedirArbol(){
+  S.player.vales=S.player.vales||[];
+  const pend=S.player.vales.filter(v=>!v.entregado && Date.now()<=v.exp);
+  if(pend.length){ verVale(pend[0].id); return; }
+  if(S.player.creditos<1){ toast('🎟️ Necesitas un crédito de árbol para pedirlo'); return; }
+  openModal(`<h2 class="sec">🚚 PEDIR MI <span>ÁRBOL</span></h2>
+    <p style="font-size:13px;margin:8px 0">Elige la especie y te damos un <b>vale con folio</b>. Preséntalo para recoger tu arbolito en:<br><b style="color:var(--neon)">${OFICINA}</b></p>
+    <p class="dim" style="font-size:11px;margin-bottom:10px">El vale vale 30 días · Solo puedes tener un vale pendiente a la vez · Tu crédito se usa al registrar la plantada, como siempre.</p>
+    ${S.unlocked.map(k=>`<button class="btn full ghost" style="margin-bottom:8px;text-align:left;font-style:normal" onclick="generarVale('${k}')">${SPECIES[k].emoji} ${SPECIES[k].nombre} <span class="dim" style="font-size:11px">· ${SPECIES[k].sci}</span></button>`).join('')}`);
+}
+function generarVale(esp){
+  const v={id:Date.now(), folio:'VA-'+Math.random().toString(36).slice(2,7).toUpperCase(), especie:esp, fecha:Date.now(), exp:Date.now()+30*DAY, entregado:false};
+  S.player.vales.push(v); save();
+  toast('🚚 ¡Vale generado! Pasa por tu árbol 🌱');
+  verVale(v.id);
+}
+function verVale(id){
+  const v=S.player.vales.find(x=>x.id===id), sp=SPECIES[v.especie];
+  const vig=!v.entregado && Date.now()<=v.exp;
+  openModal(`<div class="center">
+    <div style="font-size:56px">${sp.emoji}</div>
+    <h2 class="sec" style="text-align:center">VALE POR UN <span>${sp.nombre.toUpperCase()}</span></h2>
+    <p style="font-size:22px;font-weight:900;letter-spacing:2px;margin:8px 0">FOLIO: ${v.folio}</p>
+    <span class="tag ${v.entregado?'warn':vig?'ok':'bad'}">${v.entregado?'✅ ENTREGADO '+new Date(v.entF).toLocaleDateString('es-MX'):vig?'VIGENTE hasta '+new Date(v.exp).toLocaleDateString('es-MX'):'EXPIRADO'}</span>
+    <p style="font-size:13px;margin:10px 0">Recógelo en:<br><b>${OFICINA}</b></p>
+  </div>
+  ${vig?`<p class="dim" style="font-size:11px;margin-bottom:10px">⚠️ En la oficina, el staff escanea tu QR o anota tu folio, y presiona ENTREGADO aquí en tu teléfono al darte el árbol.</p>
+    <button class="btn full" onclick="entregaVale(${v.id})">🌱 ENTREGADO (lo presiona el staff)</button><br><br>
+    <button class="btn full ghost" onclick="descargarVale(${v.id})">💾 DESCARGAR VALE QR</button>`:''}`);
+}
+function entregaVale(id){
+  const v=S.player.vales.find(x=>x.id===id);
+  if(v.entregado||Date.now()>v.exp) return;
+  v.entregado=true; v.entF=Date.now(); save();
+  const sp=SPECIES[v.especie];
+  openModal(`<div class="center">
+    <div style="font-size:80px">✅</div>
+    <h2 class="sec" style="text-align:center">ÁRBOL ENTREGADO</h2>
+    <p style="font-size:24px;font-weight:900">${sp.emoji} ${sp.nombre}</p>
+    <p class="dim">Folio ${v.folio}<br>${new Date().toLocaleString('es-MX')}</p>
+    <div class="banner ok" style="text-align:center;margin-top:10px">¡Ahora a plantarlo y registrarlo en ➕ PLANTAR! 🌳</div>
+  </div>`);
+}
+function descargarVale(id){
+  const v=S.player.vales.find(x=>x.id===id), sp=SPECIES[v.especie];
+  if(typeof QRious==='undefined'){ toast('🛜 Necesitas internet para el QR'); return; }
+  const data=PUB+'#v='+btoa(unescape(encodeURIComponent(JSON.stringify({fo:v.folio,es:v.especie,p:S.player.name,ex:v.exp}))));
+  const cv=document.createElement('canvas'); cv.width=640; cv.height=880;
+  const x=cv.getContext('2d');
+  x.fillStyle='#fff'; x.fillRect(0,0,640,880);
+  x.strokeStyle='#2fbf28'; x.lineWidth=12; x.strokeRect(14,14,612,852);
+  x.textAlign='center';
+  x.fillStyle='#111'; x.font='italic 900 38px Arial'; x.fillText('🚚 VALE DE ÁRBOL · ÁRBOL GO',320,80);
+  x.font='80px Arial'; x.fillText(sp.emoji,320,190);
+  x.font='900 32px Arial'; x.fillText('1 '+sp.nombre,320,250);
+  x.fillStyle='#666'; x.font='italic 20px Arial'; x.fillText(sp.sci,320,282);
+  x.fillStyle='#111'; x.font='900 34px Arial'; x.fillText('FOLIO: '+v.folio,320,336);
+  x.fillStyle='#666'; x.font='19px Arial'; x.fillText('Para '+S.player.name+' · Vence '+new Date(v.exp).toLocaleDateString('es-MX'),320,370);
+  const q=new QRious({value:data,size:330,level:'M'});
+  x.fillStyle='#f2f2f2'; x.fillRect(139,396,362,362); x.drawImage(q.canvas,155,412,330,330);
+  x.fillStyle='#111'; x.font='900 22px Arial'; x.fillText('Recoger en:',320,796);
+  x.fillStyle='#444'; x.font='18px Arial'; x.fillText(OFICINA.replace('Oficina ÁRBOL GO · ',''),320,824);
+  x.fillStyle='#999'; x.font='15px Arial'; x.fillText('Válido 1 sola vez · El staff lo marca entregado',320,854);
+  const a=document.createElement('a'); a.href=cv.toDataURL('image/png'); a.download='vale_'+v.folio+'.png'; a.click();
+  toast('💾 Vale descargado');
+}
+function visitorValeHash(){
+  try{
+    const d=JSON.parse(decodeURIComponent(escape(atob(location.hash.slice(3)))));
+    const sp=SPECIES[d.es]||SPECIES.mezquite;
+    const vig=Date.now()<=d.ex;
+    const yaEnt=S.vivero && S.vivero.entregas.some(e=>e.folio===d.fo);
+    openModal(`<div class="center">
+      <div style="font-size:52px">${sp.emoji}</div>
+      <h2 class="sec" style="text-align:center">VALE <span>${esc(d.fo)}</span></h2>
+      <p style="font-size:16px;font-weight:900">1 ${sp.nombre} para ${esc(d.p)}</p>
+      <span class="tag ${yaEnt?'bad':vig?'ok':'bad'}">${yaEnt?'⚠️ FOLIO YA ENTREGADO EN ESTE VIVERO':vig?'VIGENTE hasta '+new Date(d.ex).toLocaleDateString('es-MX'):'EXPIRADO'}</span>
+    </div>
+    ${S.vivero&&!yaEnt&&vig?`<br><button class="btn full" onclick="registrarEntrega('${esc(d.fo)}','${d.es in SPECIES?d.es:'mezquite'}');location.hash='';">✅ REGISTRAR ENTREGA EN MI VIVERO</button>`:''}
+    <div class="banner ok" style="margin-top:10px;font-size:12px">🧑‍🌾 Staff: registra el folio en MODO VIVERO (PERFIL) y pide al cliente presionar ENTREGADO en su app.</div>
+    <button class="btn full ghost" onclick="location.hash='';closeModal();">CERRAR</button>`);
+  }catch(e){ location.hash=''; if(!S.player) onboarding(); }
+}
+
+/* ================= MODO VIVERO (staff) ================= */
+function vVivero(){
+  S.vivero=S.vivero||{stock:{}, entregas:[]};
+  save();
+  const tot=S.vivero.entregas.length;
+  openModal(`<h2 class="sec">🌱 MODO <span>VIVERO</span></h2>
+    <p class="dim" style="font-size:11px;margin:6px 0">Control interno del equipo: inventario del campo y entregas en oficina. Los datos viven solo en este teléfono.</p>
+    <label>Inventario (árboles listos para entregar)</label>
+    ${Object.keys(SPECIES).map(k=>`<div style="background:var(--panel2);border-radius:10px;padding:7px 12px;display:flex;align-items:center;gap:10px;margin-bottom:5px">
+      <span>${SPECIES[k].emoji}</span><span style="flex:1">${SPECIES[k].nombre}</span>
+      <button class="btn sm ghost" onclick="stockMod('${k}',-1)">−</button>
+      <b id="stk_${k}" style="min-width:28px;text-align:center;color:var(--neon)">${S.vivero.stock[k]||0}</b>
+      <button class="btn sm ghost" onclick="stockMod('${k}',1)">+</button>
+    </div>`).join('')}
+    <br><label>Registrar entrega — folio del vale</label>
+    <input id="entFolio" placeholder="VA-XXXXX" maxlength="10" style="text-transform:uppercase">
+    <select id="entEsp">${Object.keys(SPECIES).map(k=>`<option value="${k}">${SPECIES[k].emoji} ${SPECIES[k].nombre}</option>`).join('')}</select>
+    <button class="btn full" onclick="registrarEntrega()">✅ REGISTRAR ENTREGA (−1 stock)</button>
+    <p class="dim" style="font-size:11px;margin-top:10px">📦 Entregas totales: <b>${tot}</b>${tot?' · Últimas: '+S.vivero.entregas.slice(-3).reverse().map(e=>`${e.folio} (${SPECIES[e.esp]?SPECIES[e.esp].emoji:''} ${new Date(e.fecha).toLocaleDateString('es-MX')})`).join(', '):''}</p>
+    ${tot?`<button class="btn sm ghost" onclick="exportarVivero()">💾 EXPORTAR REGISTRO DE ENTREGAS</button>`:''}`);
+}
+function stockMod(k,d){
+  S.vivero.stock[k]=Math.max(0,(S.vivero.stock[k]||0)+d); save();
+  const el=document.getElementById('stk_'+k); if(el) el.textContent=S.vivero.stock[k];
+}
+function registrarEntrega(folioArg, espArg){
+  S.vivero=S.vivero||{stock:{}, entregas:[]};
+  const folio=(folioArg||$('#entFolio').value.trim().toUpperCase());
+  const esp=espArg||$('#entEsp').value;
+  if(!folio){ toast('⚠️ Escribe el folio del vale'); return; }
+  if(S.vivero.entregas.some(e=>e.folio===folio)){ toast('🚫 ¡Ese folio YA fue entregado! Revisa con el cliente.'); return; }
+  if((S.vivero.stock[esp]||0)<1){ toast(`⚠️ Sin stock de ${SPECIES[esp].nombre} — pide más al campo`); return; }
+  S.vivero.stock[esp]--;
+  S.vivero.entregas.push({folio, esp, fecha:Date.now()});
+  save(); closeModal();
+  toast(`✅ ${SPECIES[esp].emoji} Entregado · Folio ${folio} · Quedan ${S.vivero.stock[esp]}`);
+  vVivero();
+}
+function exportarVivero(){
+  const a=document.createElement('a');
+  a.href='data:application/json,'+encodeURIComponent(JSON.stringify(S.vivero,null,2));
+  a.download='vivero_arbolgo_'+dayStr()+'.json'; a.click();
+  toast('💾 Registro del vivero exportado');
 }
 
 /* ================= RETO CALLEJERO (runner) ================= */
@@ -1358,7 +1492,8 @@ function vPerfil(){
     <button class="btn sm ghost" onclick="exportar()">💾 EXPORTAR MI REGISTRO</button>
     <button class="btn sm ghost" onclick="$('#imp').click()">📂 IMPORTAR</button>
     <input type="file" id="imp" accept=".json" style="display:none" onchange="importar(this)">
-  </div>`;
+  </div>
+  <p style="margin-top:14px"><a href="#" onclick="vVivero();return false" class="dim" style="font-size:11px">🌱 Modo Vivero (solo equipo/staff)</a></p>`;
 }
 function exportar(){
   const a=document.createElement('a');
@@ -1632,6 +1767,7 @@ if(location.hash.startsWith('#a=')) visitorHash();
 else if(location.hash.startsWith('#m=')) visitorMonoHash();
 else if(location.hash.startsWith('#t=')) visitorTreeHash();
 else if(location.hash.startsWith('#c=')) visitorCuponHash();
+else if(location.hash.startsWith('#v=')) visitorValeHash();
 else if(!S.player) onboarding();
 // Refrescar alertas y cuentas regresivas si la pestaña queda abierta
 setInterval(()=>{
