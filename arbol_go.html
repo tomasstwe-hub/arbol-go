@@ -187,6 +187,15 @@ const SEASON = [1.6,1.6,1.0,1.0,0.8,0.6,0.6,0.6,0.6,0.8,1.6,1.6];
 
 const XP_PLANT=100, XP_RIEGO=15, XP_RIEGO_EARLY=3, XP_CHECKIN=20;
 const HJ_PLANT=50, HJ_RIEGO=10, PRECIO_ARBOL=150;
+const COFRE_PRECIO=250;
+
+// Convenios con locales de Obregón — poner activo:true cuando exista el acuerdo con cada negocio
+const PATROCINIOS=[
+  {k:'tacos',  e:'🌮', premio:'2 tacos de carne asada',   lugar:'Carreta aliada',   activo:false},
+  {k:'hotdog', e:'🌭', premio:'1 hot dog estilo Sonora',  lugar:'Carreta aliada',   activo:false},
+  {k:'burrito',e:'🌯', premio:'1 burrito mañanero',       lugar:'Local aliado',     activo:false},
+  {k:'cafe',   e:'☕', premio:'1 café americano',         lugar:'Cafetería aliada', activo:false}
+];
 const META_DIA = 30; // XP diarios para mantener la racha
 
 // Ropero del mono — se compra con hojas 🍃
@@ -929,9 +938,118 @@ function vMapa(){
   }catch(e){ $('#map').innerHTML='<p class="dim center" style="padding:30px">🛜 El mapa necesita internet. Tus árboles siguen guardados en MI CREW.</p>'; }
 }
 
+/* ================= COFRES Y CUPONES ================= */
+function abrirCofre(){
+  if(S.player.hojas<COFRE_PRECIO) return;
+  openModal(`<div class="center"><h2 class="sec">🎁 COFRE <span>CALLEJERO</span></h2>
+    <div style="font-size:90px;cursor:pointer;animation:puls 1s infinite" onclick="revelarCofre()">📦</div>
+    <p class="dim">Tócalo para abrirlo… (se cobran ${COFRE_PRECIO} 🍃 al abrir)</p></div>`);
+}
+function revelarCofre(){
+  if(S.player.hojas<COFRE_PRECIO){ closeModal(); return; }
+  S.player.hojas-=COFRE_PRECIO; renderChip();
+  const r=Math.random(), acts=PATROCINIOS.filter(p=>p.activo);
+  let html='';
+  if(r<0.10 && acts.length){
+    const p=acts[Math.floor(Math.random()*acts.length)];
+    const cup={id:Date.now(), e:p.e, premio:p.premio, lugar:p.lugar, fecha:Date.now(), exp:Date.now()+7*DAY, usado:false,
+      folio:'AG-'+Math.random().toString(36).slice(2,7).toUpperCase()};
+    S.player.cupones=S.player.cupones||[]; S.player.cupones.push(cup);
+    html=`<div style="font-size:64px">${p.e}</div><b style="font-size:18px;color:var(--yellow)">¡¡CUPÓN REAL!!</b><p style="margin:8px 0">${p.premio}<br><span class="dim">en ${p.lugar} · vale 7 días</span></p><p class="dim" style="font-size:12px">Está guardado en TIENDA → Mis cupones</p>`;
+  } else if(r<0.10){
+    S.player.hojas+=300; html=`<div style="font-size:64px">🍀</div><b style="color:var(--yellow)">¡JACKPOT!</b><p>+300 🍃</p>`;
+  } else if(r<0.35){
+    const x=50+Math.floor(Math.random()*51); addXP(x,0); html=`<div style="font-size:64px">⭐</div><b>+${x} XP para tu mono</b>`;
+  } else if(r<0.50){
+    S.player.creditos++; html=`<div style="font-size:64px">🎟️</div><b>+1 crédito de árbol</b><p class="dim">¡Otro árbol para la ciudad!</p>`;
+  } else if(r<0.62){
+    const falta=Object.keys(ITEMS).filter(k=>!S.player.items.includes(k)&&!(ITEMS[k].lvl&&levelOf(S.player.xp)+1<ITEMS[k].lvl));
+    if(falta.length){ const k=falta[Math.floor(Math.random()*falta.length)]; S.player.items.push(k); S.player.gear[ITEMS[k].slot]=k;
+      html=`<div style="font-size:64px">${ITEMS[k].e}</div><b>¡${ITEMS[k].n} para tu mono!</b>`; }
+    else { S.player.hojas+=150; html=`<div style="font-size:64px">🍃</div><b>+150 hojas</b>`; }
+  } else {
+    const hj=50+Math.floor(Math.random()*101); S.player.hojas+=hj; html=`<div style="font-size:64px">🍃</div><b>+${hj} hojas</b>`;
+  }
+  save();
+  openModal(`<div class="center"><div style="font-size:40px">🎉</div>${html}<br><button class="btn full" onclick="closeModal();render()">¡ÓRALE!</button></div>`);
+}
+function estadoCupon(c){
+  if(c.usado) return {t:'USADO', cl:'dim'};
+  if(Date.now()>c.exp) return {t:'EXPIRADO', cl:'bad'};
+  return {t:'VIGENTE hasta '+new Date(c.exp).toLocaleDateString('es-MX'), cl:'ok'};
+}
+function verCupon(id){
+  const c=S.player.cupones.find(x=>x.id===id), st=estadoCupon(c);
+  openModal(`<div class="center">
+    <div style="font-size:64px">${c.e}</div>
+    <h2 class="sec" style="text-align:center">${c.premio.toUpperCase()}</h2>
+    <div class="dim">${c.lugar}</div>
+    <p style="margin:10px 0;font-size:20px;font-weight:900;letter-spacing:2px">FOLIO: ${c.folio}</p>
+    <span class="tag ${st.cl==='ok'?'ok':st.cl==='bad'?'bad':'warn'}">${st.t}</span>
+  </div>
+  <p style="font-size:12px;margin:12px 0" class="dim">⚠️ Vale UNA sola vez. Canjéalo únicamente frente al vendedor: él ve cómo lo marcas usado en tu pantalla.</p>
+  ${!c.usado&&Date.now()<=c.exp?`
+    <button class="btn full" onclick="canjearCupon(${c.id})">✅ CANJEAR FRENTE AL VENDEDOR</button><br><br>
+    <button class="btn full ghost" onclick="descargarCupon(${c.id})">💾 DESCARGAR CUPÓN QR</button>`:''}`);
+}
+function canjearCupon(id){
+  const c=S.player.cupones.find(x=>x.id===id);
+  if(c.usado||Date.now()>c.exp) return;
+  c.usado=true; c.usadoF=Date.now(); save();
+  openModal(`<div class="center">
+    <div style="font-size:80px">✅</div>
+    <h2 class="sec" style="text-align:center">CANJEADO</h2>
+    <p style="font-size:26px;font-weight:900">${c.e} ${c.premio}</p>
+    <p class="dim">Folio ${c.folio}<br>${new Date().toLocaleString('es-MX')}</p>
+    <div class="banner ok" style="text-align:center;margin-top:10px">Muestre esta pantalla al vendedor 🤝<br>¡Buen provecho, héroe verde! 🌳</div>
+  </div>`);
+}
+function descargarCupon(id){
+  const c=S.player.cupones.find(x=>x.id===id);
+  if(typeof QRious==='undefined'){ toast('🛜 Necesitas internet para el QR'); return; }
+  const data=PUB+'#c='+btoa(unescape(encodeURIComponent(JSON.stringify({e:c.e,pr:c.premio,lu:c.lugar,fo:c.folio,ex:c.exp,p:S.player.name}))));
+  const cv=document.createElement('canvas'); cv.width=640; cv.height=880;
+  const x=cv.getContext('2d');
+  x.fillStyle='#fff'; x.fillRect(0,0,640,880);
+  x.strokeStyle='#ffb400'; x.lineWidth=12; x.strokeRect(14,14,612,852);
+  x.textAlign='center';
+  x.fillStyle='#111'; x.font='italic 900 40px Arial'; x.fillText('🎁 CUPÓN ÁRBOL GO',320,80);
+  x.font='80px Arial'; x.fillText(c.e,320,190);
+  x.font='900 30px Arial'; x.fillText(c.premio,320,250);
+  x.fillStyle='#666'; x.font='22px Arial'; x.fillText(c.lugar,320,285);
+  x.fillStyle='#111'; x.font='900 34px Arial'; x.fillText('FOLIO: '+c.folio,320,340);
+  x.fillStyle='#666'; x.font='19px Arial'; x.fillText('Ganado por '+S.player.name+' · Vence '+new Date(c.exp).toLocaleDateString('es-MX'),320,375);
+  const q=new QRious({value:data,size:330,level:'M'});
+  x.fillStyle='#f2f2f2'; x.fillRect(139,400,362,362); x.drawImage(q.canvas,155,416,330,330);
+  x.fillStyle='#111'; x.font='900 24px Arial'; x.fillText('Válido 1 sola vez',320,800);
+  x.fillStyle='#666'; x.font='17px Arial'; x.fillText('El cliente lo marca CANJEADO en su app frente al vendedor',320,832);
+  const a=document.createElement('a'); a.href=cv.toDataURL('image/png'); a.download='cupon_'+c.folio+'.png'; a.click();
+  toast('💾 Cupón descargado');
+}
+function visitorCuponHash(){
+  try{
+    const d=JSON.parse(decodeURIComponent(escape(atob(location.hash.slice(3)))));
+    const vigente=Date.now()<=d.ex;
+    openModal(`<div class="center">
+      <div style="font-size:60px">${d.e}</div>
+      <h2 class="sec" style="text-align:center">CUPÓN <span>ÁRBOL GO</span></h2>
+      <p style="font-size:18px;font-weight:900">${esc(d.pr)}</p>
+      <div class="dim">${esc(d.lu)} · ganado por ${esc(d.p)}</div>
+      <p style="margin:10px 0;font-size:20px;font-weight:900;letter-spacing:2px">FOLIO: ${esc(d.fo)}</p>
+      <span class="tag ${vigente?'ok':'bad'}">${vigente?'VIGENTE hasta '+new Date(d.ex).toLocaleDateString('es-MX'):'EXPIRADO'}</span>
+    </div>
+    <div class="banner ok" style="margin-top:12px;font-size:12px">🧑‍🍳 Para el vendedor: pida al cliente que presione CANJEAR en su app frente a usted — verá la pantalla verde de canje con este folio y la hora.</div>
+    <button class="btn full" onclick="location.hash='';closeModal();">CERRAR</button>`);
+  }catch(e){ location.hash=''; if(!S.player) onboarding(); }
+}
+
 function vTienda(){
+  const acts=PATROCINIOS.filter(p=>p.activo);
   let h = `<h2 class="sec">TIENDA <span>STREET</span> 🛒</h2>
   <div class="banner ok">🍃 Tienes <b>${S.player.hojas} hojas</b>. Se ganan plantando, regando a tiempo y haciendo check-ins.</div>
+  <div class="card shop-item"><div class="e">🎁</div><div style="flex:1"><b>Cofre Callejero</b><div class="dim">Sorpresa: XP, hojas, créditos de árbol, ropa para tu mono${acts.length?' ¡y cupones de comida real! 🌮':''}</div>${acts.length?'':'<div class="dim" style="font-size:10px">🔜 Premios de tacos, hot dogs y café se activan con los locales aliados</div>'}</div>
+    <div class="center"><div class="price">${COFRE_PRECIO} 🍃</div><button class="btn sm" style="background:var(--yellow);color:#111" ${S.player.hojas<COFRE_PRECIO?'disabled':''} onclick="abrirCofre()">ABRIR</button></div></div>
+  ${(S.player.cupones&&S.player.cupones.length)?`<h2 class="sec" style="font-size:15px;margin-top:14px">MIS <span>CUPONES</span> 🎫</h2>`+S.player.cupones.slice().reverse().map(c=>{const st=estadoCupon(c);return `<div class="card shop-item"><div class="e">${c.e}</div><div style="flex:1"><b>${c.premio}</b><div class="dim">${c.lugar} · Folio ${c.folio}</div><span class="tag ${st.cl==='ok'?'ok':st.cl==='bad'?'bad':'warn'}" style="margin-top:2px">${st.t}</span></div><button class="btn sm ghost" onclick="verCupon(${c.id})">VER</button></div>`;}).join(''):''}
   <div class="card shop-item"><div class="e">🎟️</div><div style="flex:1"><b>Crédito de árbol</b><div class="dim">Un árbol nuevo para plantar donde quieras</div></div>
     <div class="center"><div class="price">${PRECIO_ARBOL} 🍃</div><button class="btn sm" ${S.player.hojas<PRECIO_ARBOL?'disabled':''} onclick="comprarCredito()">CANJEAR</button></div></div>
   <h2 class="sec" style="font-size:15px;margin-top:18px">DESBLOQUEA <span>ESPECIES PRO</span></h2>`;
@@ -1233,6 +1351,7 @@ if(S.player) render();
 if(location.hash.startsWith('#a=')) visitorHash();
 else if(location.hash.startsWith('#m=')) visitorMonoHash();
 else if(location.hash.startsWith('#t=')) visitorTreeHash();
+else if(location.hash.startsWith('#c=')) visitorCuponHash();
 else if(!S.player) onboarding();
 // Refrescar alertas y cuentas regresivas si la pestaña queda abierta
 setInterval(()=>{
