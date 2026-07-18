@@ -254,6 +254,23 @@ function guardiaDe(t){
   const sem = Math.floor((Date.now()-t.ronda.i)/(7*DAY));
   return t.ronda.g[((sem % t.ronda.g.length)+t.ronda.g.length) % t.ronda.g.length];
 }
+function rolDe(t, nombre){
+  if(!t.ronda || !t.ronda.g || !t.ronda.g.length) return null;
+  const i = t.ronda.g.indexOf(nombre);
+  if(i<0) return null;
+  const len = t.ronda.g.length;
+  const sem = Math.floor((Date.now()-t.ronda.i)/(7*DAY));
+  if(i === ((sem%len)+len)%len) return '💧 Regador';
+  if(len>1 && i === (((sem+1)%len)+len)%len) return '📸 Vigilante';
+  return '🍃 Apoyo';
+}
+function medallaEquipo(t){
+  const x=t.teamXP||0;
+  if(x>=800) return {e:'🥇',n:'Equipo de Oro',next:null};
+  if(x>=300) return {e:'🥈',n:'Equipo de Plata',next:800};
+  if(x>=100) return {e:'🥉',n:'Equipo de Bronce',next:300};
+  return {e:'🌱',n:'Equipo Semilla',next:100};
+}
 
 function statusOf(t){
   const sp = SPECIES[t.especie];
@@ -371,7 +388,7 @@ function vArboles(){
         <div style="flex:1">
           <div class="nm">${esc(t.nombre)} <span class="dim" style="font-weight:400">· ${sp.nombre}</span></div>
           <div class="meta">🕐 ${fmtDias(age)} · 💧 ${t.riegos.length} riegos · último hace ${fmtDias((Date.now()-lastRiego(t))/DAY)}</div>
-          ${guardiaDe(t)?`<div class="meta">🤝 Esta semana cuida: <b style="color:var(--cyan)">${esc(guardiaDe(t))}</b></div>`:''}
+          ${guardiaDe(t)?`<div class="meta">🤝 Esta semana riega: <b style="color:var(--cyan)">${esc(guardiaDe(t))}</b>${rolDe(t,S.player.name)?` · Tu chamba: <b style="color:var(--neon)">${rolDe(t,S.player.name)}</b>`:''} · ${medallaEquipo(t).e} ${t.teamXP||0} XP equipo</div>`:''}
           <span class="tag ${st.k}">${st.txt}</span>
         </div>
       </div>
@@ -409,11 +426,18 @@ function regar(id){
   t.riegos.push({f:Date.now()});
   S.player.racha=(S.player.racha||0)+1;
   const cur=guardiaDe(t);
-  const bonoRonda = cur===S.player.name ? 5 : 0;
-  addXP(XP_RIEGO, HJ_RIEGO+bonoRonda);
-  if(bonoRonda) toast(`💧 +${XP_RIEGO} XP +${HJ_RIEGO+bonoRonda}🍃 · ¡Riego de tu ronda! 🤝🔥`);
-  else if(cur) toast(`💧 +${XP_RIEGO} XP +${HJ_RIEGO}🍃 · Esta semana le tocaba a ${cur} — ¡gracias por el apoyo! 🤝`);
-  else toast(`💧 +${XP_RIEGO} XP +${HJ_RIEGO}🍃 · Racha x${S.player.racha} 🔥`);
+  if(cur===S.player.name){
+    t.teamXP=(t.teamXP||0)+10;
+    addXP(XP_RIEGO+10, HJ_RIEGO+5);
+    toast(`💧 ¡CHAMBA DE REGADOR CUMPLIDA! +${XP_RIEGO+10} XP +${HJ_RIEGO+5}🍃 · +10 XP de equipo 🤝🔥`);
+  } else if(cur){
+    t.teamXP=(t.teamXP||0)+5;
+    addXP(XP_RIEGO, HJ_RIEGO);
+    toast(`💧 +${XP_RIEGO} XP +${HJ_RIEGO}🍃 · Esta semana riega ${cur}, ¡gracias por el apoyo! 🤝`);
+  } else {
+    addXP(XP_RIEGO, HJ_RIEGO);
+    toast(`💧 +${XP_RIEGO} XP +${HJ_RIEGO}🍃 · Racha x${S.player.racha} 🔥`);
+  }
   save(); render();
 }
 
@@ -432,7 +456,14 @@ function doCheckin(id){
   t.condicion = $('#cond').value;
   t.chk = dayStr();
   const f = $('#ft').files[0];
-  const fin = ()=>{ addXP(XP_CHECKIN,5); save(); closeModal(); toast(`📸 +${XP_CHECKIN} XP · Monitoreo registrado`); render(); };
+  const esVigia = rolDe(t,S.player.name)==='📸 Vigilante';
+  const fin = ()=>{
+    if(esVigia){ t.teamXP=(t.teamXP||0)+10; addXP(XP_CHECKIN+10,10); }
+    else addXP(XP_CHECKIN,5);
+    save(); closeModal();
+    toast(esVigia?`📸 ¡CHAMBA DE VIGILANTE CUMPLIDA! +${XP_CHECKIN+10} XP · +10 XP de equipo 🤝`:`📸 +${XP_CHECKIN} XP · Monitoreo registrado`);
+    render();
+  };
   if(f){
     const img=new Image(), r=new FileReader();
     r.onload=e=>{ img.onload=()=>{ const c=document.createElement('canvas'); const k=240/Math.max(img.width,img.height);
@@ -623,19 +654,28 @@ function visitorHash(){
 
 /* ================= RONDAS DE CUIDADO ================= */
 function arbolShareURL(t){
-  const d={id:t.id, n:t.nombre, e:t.especie, f:t.fecha, la:+t.lat.toFixed(5), lo:+t.lng.toFixed(5), p:S.player.name, ro:t.ronda||null};
+  const d={id:t.id, n:t.nombre, e:t.especie, f:t.fecha, la:+t.lat.toFixed(5), lo:+t.lng.toFixed(5), p:S.player.name, ro:t.ronda||null, tx:t.teamXP||0};
   return PUB+'#t='+btoa(unescape(encodeURIComponent(JSON.stringify(d))));
 }
 function rondaModal(id){
   const t=S.trees.find(x=>x.id===id);
   if(!t.ronda) t.ronda={g:[S.player.name], i:Date.now()};
+  t.ronda.av=t.ronda.av||{};
+  t.ronda.av[S.player.name]=S.player.avatar;
   save();
-  const cur=guardiaDe(t);
-  const msg=`🤝 ¡Únete a la ronda de "${t.nombre}" en ÁRBOL GO! Nos turnamos por semanas para regarlo. Abre la liga y adóptalo: `;
+  const cur=guardiaDe(t), med=medallaEquipo(t);
+  const msg=`🤝 ¡Únete a la ronda de "${t.nombre}" en ÁRBOL GO! Nos turnamos las chambas por semanas: regar, vigilar y apoyar. Abre la liga y adóptalo: `;
   openModal(`<h2 class="sec">🤝 RONDA DE <span>CUIDADO</span></h2>
-    <p style="font-size:13px;margin:8px 0">Túrnense el árbol por semanas: una semana riega uno, la siguiente el otro. La app calcula sola a quién le toca.</p>
-    <div class="banner ok" style="text-align:center">Esta semana cuida: <b>${esc(cur)}</b></div>
-    ${t.ronda.g.map((n,i)=>`<div style="background:var(--panel2);border-radius:10px;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span>${i+1}. ${esc(n)} ${n===cur?'⏰':''}</span>${t.ronda.g.length>1?`<button class="btn sm ghost" onclick="quitarGuardian(${id},${i})">✕</button>`:''}</div>`).join('')}
+    <p style="font-size:13px;margin:8px 0">Las chambas rotan solas cada semana: <b>💧 Regador</b> riega (+25 XP), <b>📸 Vigilante</b> hace el check-in (+30 XP), <b>🍃 Apoyo</b> echa ojo. Cumplir tu chamba suma <b>XP de equipo</b> al árbol.</p>
+    <div class="banner ok" style="text-align:center">${med.e} <b>${med.n}</b> · ${t.teamXP||0} XP de equipo${med.next?` · faltan ${med.next-(t.teamXP||0)} para subir`:' · ¡MÁXIMO!'}</div>
+    ${t.ronda.g.map((n,i)=>{
+      const rol=rolDe(t,n), av=t.ronda.av[n]||'🌱';
+      return `<div style="background:var(--panel2);border-radius:10px;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;margin-bottom:6px${rol==='💧 Regador'?';border:1px solid var(--cyan)':''}">
+        <span style="font-size:20px">${av}</span>
+        <span style="flex:1;margin-left:8px">${esc(n)}${n===S.player.name?' <span class="dim">(tú)</span>':''}<br><b style="font-size:11px;color:var(--neon)">${rol}</b></span>
+        ${t.ronda.g.length>1?`<button class="btn sm ghost" onclick="quitarGuardian(${id},${i})">✕</button>`:''}
+      </div>`;
+    }).join('')}
     <input id="gNom" placeholder="Nombre del compa (como se llame en su juego)" maxlength="20">
     <button class="btn full ghost" onclick="agregarGuardian(${id})">➕ AGREGAR A LA RONDA</button>
     <br><br>
@@ -679,8 +719,10 @@ function adoptarArbol(){
   if(S.trees.some(t=>t.id===d.id)){ toast('🌳 Este árbol ya está en tu crew'); }
   else{
     const esp = (d.e in SPECIES)?d.e:'mezquite';
-    const t={id:d.id, especie:esp, nombre:d.n, lat:+d.la||OBREGON[0], lng:+d.lo||OBREGON[1], fecha:d.f, riegos:[{f:Date.now()}], foto:null, condicion:null, ronda:d.ro||{g:[d.p],i:d.f}};
+    const t={id:d.id, especie:esp, nombre:d.n, lat:+d.la||OBREGON[0], lng:+d.lo||OBREGON[1], fecha:d.f, riegos:[{f:Date.now()}], foto:null, condicion:null, ronda:d.ro||{g:[d.p],i:d.f}, teamXP:d.tx||0};
+    t.ronda.av=t.ronda.av||{};
     if(!t.ronda.g.includes(S.player.name)) t.ronda.g.push(S.player.name);
+    t.ronda.av[S.player.name]=S.player.avatar;
     S.trees.push(t);
     if(!S.player.totems.includes(esp)){ S.player.totems.push(esp); setTimeout(()=>totemCard(esp),900); }
     addXP(25,10);
