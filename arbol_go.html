@@ -226,7 +226,12 @@ function load(){
     }
   }
 }
-function save(){ try{ localStorage.setItem('arbolgo', JSON.stringify(S)); }catch(e){ STORAGE_OK=false; } }
+function save(){
+  try{ localStorage.setItem('arbolgo', JSON.stringify(S)); }
+  catch(e){
+    if(STORAGE_OK){ STORAGE_OK=false; try{ toast('⚠️ Memoria del navegador llena — exporta tu registro desde PERFIL'); }catch(_){} }
+  }
+}
 load();
 
 /* ================= HELPERS ================= */
@@ -465,6 +470,7 @@ function usarGPS(){
   },()=>toast('⚠️ No se pudo obtener GPS — toca el mapa'));
 }
 function doPlant(){
+  if(S.player.creditos<1){ toast('🎟️ Sin créditos de árbol — canjea hojas en la tienda'); TAB='tienda'; render(); return; }
   const nom = $('#tnom').value.trim();
   if(!nom){ toast('⚠️ Ponle un apodo a tu árbol'); return; }
   if(!plantLoc){ toast('⚠️ Marca dónde lo plantaste'); return; }
@@ -700,8 +706,14 @@ function vTienda(){
   });
   $('#view').innerHTML=h;
 }
-function comprarCredito(){ S.player.hojas-=PRECIO_ARBOL; S.player.creditos++; save(); toast('🎟️ +1 crédito de árbol. ¡A plantar!'); render(); }
-function unlock(k){ S.player.hojas-=SPECIES[k].cost; S.unlocked.push(k); save(); toast(`${SPECIES[k].emoji} ¡${SPECIES[k].nombre} desbloqueado!`); render(); }
+function comprarCredito(){
+  if(S.player.hojas<PRECIO_ARBOL) return;
+  S.player.hojas-=PRECIO_ARBOL; S.player.creditos++; save(); toast('🎟️ +1 crédito de árbol. ¡A plantar!'); render();
+}
+function unlock(k){
+  if(S.unlocked.includes(k) || S.player.hojas<SPECIES[k].cost) return;
+  S.player.hojas-=SPECIES[k].cost; S.unlocked.push(k); save(); toast(`${SPECIES[k].emoji} ¡${SPECIES[k].nombre} desbloqueado!`); render();
+}
 
 function vPerfil(){
   const lv = levelOf(S.player.xp);
@@ -950,6 +962,10 @@ function startGame(){
 if(S.player) render();
 if(location.hash.startsWith('#a=')) visitorHash();
 else if(!S.player) onboarding();
+// Refrescar alertas y cuentas regresivas si la pestaña queda abierta
+setInterval(()=>{
+  if(S.player && (TAB==='arboles'||TAB==='mono') && !$('#modal').classList.contains('open')) render();
+}, 180000);
 </script>
 </body>
 </html>
