@@ -608,6 +608,47 @@ function visitorHash(){
   }catch(e){ location.hash=''; if(!S.player) onboarding(); }
 }
 
+/* ================= COMPARTIR MONO ================= */
+function monoShareURL(){
+  const p=S.player;
+  const d={p:p.name, av:p.avatar, xp:p.xp, sk:p.strk||0, g:p.gear, a:S.trees.length,
+    r:S.trees.reduce((x,t)=>x+t.riegos.length,0), c:+S.trees.reduce((x,t)=>x+co2Of(t),0).toFixed(1)};
+  return PUB+'#m='+btoa(unescape(encodeURIComponent(JSON.stringify(d))));
+}
+function compartirMono(){
+  const url=monoShareURL(), p=S.player, lv=levelOf(p.xp);
+  const msg=`${p.avatar} ¡Mira mi mono en ÁRBOL GO! Soy ${LEVELS[lv].t} con ${S.trees.length} árbol${S.trees.length===1?'':'es'} y racha de ${p.strk||0} día${(p.strk||0)===1?'':'s'} 🔥 ¿Puedes superarme? 🌳`;
+  openModal(`<h2 class="sec">📣 PRESUMIR <span>MI MONO</span></h2>
+    <div class="center">${monoSVG(p,'hyped')}</div>
+    <p style="font-size:13px;margin:8px 0;background:var(--panel2);border-radius:10px;padding:10px">${esc(msg)}</p>
+    <a class="btn full" style="text-decoration:none;display:block;text-align:center;margin-bottom:8px" href="https://wa.me/?text=${encodeURIComponent(msg+' '+url)}" target="_blank">💬 COMPARTIR POR WHATSAPP</a>
+    <button class="btn full ghost" onclick="navigator.clipboard.writeText('${url}').then(()=>toast('🔗 Liga copiada — pégala donde quieras'))">🔗 COPIAR LIGA</button>`);
+}
+function visitorMonoHash(){
+  try{
+    const d=JSON.parse(decodeURIComponent(escape(atob(location.hash.slice(3)))));
+    const lv=levelOf(d.xp||0);
+    const fake={name:d.p, avatar:d.av||'🦌', gear:d.g||{}, xp:d.xp||0};
+    let comp='';
+    if(S.player){
+      const miLv=levelOf(S.player.xp), gano=(S.player.strk||0)>=(d.sk||0);
+      comp=`<div class="banner ${gano?'ok':'bad'}" style="text-align:center">TÚ 🔥${S.player.strk||0} · Lv${miLv+1} &nbsp;VS&nbsp; ${esc(d.p)} 🔥${d.sk||0} · Lv${lv+1}<br>${gano?'¡Vas ganando! 😎':'¡Te está ganando! 😱'}</div>`;
+    }
+    openModal(`<div class="center">
+      ${monoSVG(fake,'hyped')}
+      <h2 class="sec" style="text-align:center">${esc(d.p||'???').toUpperCase()} ${d.av||''}</h2>
+      <div class="dim">${LEVELS[lv].e} ${LEVELS[lv].t} · Nivel ${lv+1}</div>
+    </div>
+    <div class="grid3" style="margin:12px 0">
+      <div class="stat"><div class="v">🔥 ${d.sk||0}</div><div class="l">racha</div></div>
+      <div class="stat"><div class="v cy">${d.a||0}</div><div class="l">árboles</div></div>
+      <div class="stat"><div class="v pk">${d.c||0} kg</div><div class="l">CO₂</div></div>
+    </div>
+    ${comp}
+    <button class="btn full" onclick="location.hash='';closeModal();">${S.player?'💪 ¡A SUPERARLO!':'🎮 ¡QUIERO MI PROPIO MONO!'}</button>`);
+  }catch(e){ location.hash=''; if(!S.player) onboarding(); }
+}
+
 /* ================= TRIVIA SONORENSE ================= */
 const TRIVIA=[
  {q:'¿Cómo se llaman a sí mismos los yaquis?',o:['Yoeme','Comcaac','Rarámuri'],a:0,d:'Yoeme significa "gente". Los yaquis viven en 8 pueblos tradicionales a lo largo del Río Yaqui.'},
@@ -806,11 +847,12 @@ function monoMsg(){
   const arr = POOL[monoMood()];
   return arr[Math.floor(Math.random()*arr.length)];
 }
-function monoSVG(){
-  const p=S.player, g=p.gear, lvl=levelOf(p.xp), mood=monoMood();
+function monoSVG(pl, forceMood){
+  const own=!pl;
+  const p=pl||S.player, g=p.gear||{}, lvl=levelOf(p.xp||0), mood=forceMood||monoMood();
   const hood = g.hoodie&&ITEMS[g.hoodie] ? ITEMS[g.hoodie].c : '#3a4250';
-  const it = k=>g[k]?ITEMS[g[k]]:null;
-  let s = `<svg class="monoSvg" id="monoSvg" onclick="monoTap()" width="230" height="260" viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg">`;
+  const it = k=>g[k]&&ITEMS[g[k]]?ITEMS[g[k]]:null;
+  let s = `<svg class="monoSvg" ${own?'id="monoSvg" onclick="monoTap()"':''} width="230" height="260" viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg">`;
   // Aura de evolución por nivel
   if(lvl>=1) s+=`<circle cx="100" cy="120" r="${70+lvl*6}" fill="rgba(57,255,20,${0.03+lvl*0.012})"/>`;
   if(lvl>=3) s+=`<circle cx="100" cy="120" r="${60+lvl*4}" fill="rgba(0,229,255,0.05)"/>`;
@@ -867,8 +909,9 @@ function monoSVG(){
   return s+`</svg>`;
 }
 function monoTap(){
-  const el=$('#monoSvg'); el.classList.remove('bounce'); void el.offsetWidth; el.classList.add('bounce');
-  $('#monoBubble').innerHTML = monoMsg();
+  const el=$('#monoSvg'), b=$('#monoBubble'); if(!el||!b) return;
+  el.classList.remove('bounce'); void el.offsetWidth; el.classList.add('bounce');
+  b.innerHTML = monoMsg();
 }
 function vMono(){
   const p=S.player, lvl=levelOf(p.xp), mood=monoMood();
@@ -881,7 +924,8 @@ function vMono(){
       <span class="flame">🔥 ${p.strk}</span>
       <div class="goalbar"><div class="xpbar"><i style="width:${pct}%"></i></div><div class="dim" style="font-size:10px">META DE HOY: ${Math.min(p.dayXP,META_DIA)}/${META_DIA} XP</div></div>
     </div>
-    <p class="dim" style="margin-bottom:14px">Toca a tu mono para que te hable · Gana ${META_DIA} XP diarios o pierdes la racha 🔥</p>
+    <p class="dim" style="margin-bottom:10px">Toca a tu mono para que te hable · Gana ${META_DIA} XP diarios o pierdes la racha 🔥</p>
+    <button class="btn sm pink" onclick="compartirMono()" style="margin-bottom:14px">📣 PRESUMIR MI MONO</button>
   </div>
   ${(()=>{ const tv=(p.trivia&&p.trivia.date===dayStr())?p.trivia.done:0;
   return `<div class="card" style="display:flex;align-items:center;gap:12px;text-align:left">
@@ -966,6 +1010,7 @@ function startGame(){
 /* ================= INIT ================= */
 if(S.player) render();
 if(location.hash.startsWith('#a=')) visitorHash();
+else if(location.hash.startsWith('#m=')) visitorMonoHash();
 else if(!S.player) onboarding();
 // Refrescar alertas y cuentas regresivas si la pestaña queda abierta
 setInterval(()=>{
