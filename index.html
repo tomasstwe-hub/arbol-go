@@ -201,19 +201,32 @@ const PATROCINIOS=[
 ];
 const META_DIA = 30; // XP diarios para mantener la racha
 
-// Ropero del mono — se compra con hojas 🍃
+// Ropero del mono — se compra con hojas 🍃 · Rarezas: común, rara, épica, legendaria
+const RAREZA={comun:{n:'Común',c:'#8b97a5'}, rara:{n:'Rara',c:'#00e5ff'}, epica:{n:'Épica',c:'#ff2e88'}, legendaria:{n:'Legendaria',c:'#ffe600'}};
 const ITEMS = {
-  skate_base: {n:'Patineta Clásica', e:'🛹', p:0,    slot:'skate',  c:'#8b97a5'},
-  cap_red:    {n:'Gorra Roja',       e:'🧢', p:80,   slot:'cap',    c:'#e03535'},
-  cap_neon:   {n:'Gorra Neón',       e:'🧢', p:150,  slot:'cap',    c:'#39ff14'},
-  lentes:     {n:'Lentes Oscuros',   e:'🕶️', p:120,  slot:'glasses'},
-  hoodie_pink:{n:'Hoodie Rosa',      e:'🧥', p:100,  slot:'hoodie', c:'#ff2e88'},
-  hoodie_cyan:{n:'Hoodie Cian',      e:'🧥', p:100,  slot:'hoodie', c:'#00a8bd'},
-  audifonos:  {n:'Audífonos',        e:'🎧', p:200,  slot:'phones', lvl:2},
-  skate_fuego:{n:'Patineta Fuego',   e:'🔥', p:250,  slot:'skate',  c:'#ff6a00', lvl:2},
-  mascota:    {n:'Perrito Callejero',e:'🐕', p:400,  slot:'pet',    lvl:3},
-  mohawk:     {n:'Mohawk Verde',     e:'🤘', p:300,  slot:'cap',    c:'#39ff14', lvl:3},
-  corona:     {n:'Corona Leyenda',   e:'👑', p:1000, slot:'cap',    lvl:6}
+  skate_base:    {n:'Patineta Clásica', e:'🛹', p:0,    slot:'skate',  c:'#8b97a5', r:'comun'},
+  cap_red:       {n:'Gorra Roja',       e:'🧢', p:80,   slot:'cap',    c:'#e03535', r:'comun'},
+  cap_azul:      {n:'Gorra Azul',       e:'🧢', p:80,   slot:'cap',    c:'#2979ff', r:'comun'},
+  cap_naranja:   {n:'Gorra Naranja',    e:'🧢', p:80,   slot:'cap',    c:'#ff6a00', r:'comun'},
+  cap_negra:     {n:'Gorra Negra',      e:'🧢', p:100,  slot:'cap',    c:'#20242b', r:'comun'},
+  cap_morada:    {n:'Gorra Morada',     e:'🧢', p:120,  slot:'cap',    c:'#8e4bd0', r:'rara'},
+  cap_neon:      {n:'Gorra Neón',       e:'🧢', p:150,  slot:'cap',    c:'#39ff14', r:'rara'},
+  lentes:        {n:'Lentes Oscuros',   e:'🕶️', p:120,  slot:'glasses', r:'rara'},
+  hoodie_pink:   {n:'Hoodie Rosa',      e:'🧥', p:100,  slot:'hoodie', c:'#ff2e88', r:'comun'},
+  hoodie_cyan:   {n:'Hoodie Cian',      e:'🧥', p:100,  slot:'hoodie', c:'#00a8bd', r:'comun'},
+  hoodie_negro:  {n:'Hoodie Negro',     e:'🧥', p:120,  slot:'hoodie', c:'#14171c', r:'comun'},
+  hoodie_naranja:{n:'Hoodie Naranja',   e:'🧥', p:140,  slot:'hoodie', c:'#ff6a00', r:'rara'},
+  hoodie_morado: {n:'Hoodie Morado',    e:'🧥', p:180,  slot:'hoodie', c:'#7a3fd1', r:'rara'},
+  tenis_blancos: {n:'Tenis Blancos',    e:'👟', p:60,   slot:'shoes',  c:'#f2f5f7', r:'comun'},
+  tenis_rojos:   {n:'Tenis Rojos',      e:'👟', p:90,   slot:'shoes',  c:'#e03535', r:'comun'},
+  tenis_azules:  {n:'Tenis Azules',     e:'👟', p:90,   slot:'shoes',  c:'#2979ff', r:'comun'},
+  tenis_neon:    {n:'Tenis Neón',       e:'👟', p:200,  slot:'shoes',  c:'#39ff14', r:'rara', lvl:2},
+  audifonos:     {n:'Audífonos',        e:'🎧', p:200,  slot:'phones', r:'rara', lvl:2},
+  mohawk:        {n:'Mohawk Verde',     e:'🤘', p:300,  slot:'cap',    c:'#39ff14', r:'epica', lvl:3},
+  mascota:       {n:'Perrito Callejero',e:'🐕', p:400,  slot:'pet',    r:'epica', lvl:3},
+  skate_fuego:   {n:'Patineta de Fuego',e:'🔥', p:0,    slot:'skate',  c:'#ff6a00', r:'epica', cofre:true},
+  tenis_oro:     {n:'Tenis de Oro',     e:'👟', p:600,  slot:'shoes',  c:'#ffd700', r:'legendaria', lvl:4},
+  corona:        {n:'Corona Leyenda',   e:'👑', p:1000, slot:'cap',    r:'legendaria', lvl:6}
 };
 
 // Mascotas tamagotchi: cada tótem ganado puede acompañarte y da un poder según su lazo
@@ -279,7 +292,8 @@ function apapachar(){
 function dayStr(d){ d=d||new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function yesterdayStr(){ const d=new Date(); d.setDate(d.getDate()-1); return dayStr(d); }
 function initGear(p){
-  p.gear = p.gear||{hoodie:null,cap:null,glasses:null,phones:null,skate:'skate_base',pet:null};
+  p.gear = p.gear||{hoodie:null,cap:null,glasses:null,phones:null,skate:'skate_base',pet:null,shoes:null};
+  if(p.gear.shoes===undefined) p.gear.shoes=null;
   p.items = p.items||['skate_base'];
   p.strk = p.strk||0; p.prevStrk = p.prevStrk||0;
   p.lastDay = p.lastDay||null;
@@ -1250,6 +1264,9 @@ function monoSVG(pl, forceMood){
   if(sk) s+=`<rect x="58" y="212" width="84" height="8" rx="4" fill="${sk.c}"/><circle cx="74" cy="224" r="5" fill="#ffe600"/><circle cx="126" cy="224" r="5" fill="#ffe600"/>`;
   // Piernas
   s+=`<rect x="82" y="178" width="13" height="34" rx="5" fill="#20262e"/><rect x="105" y="178" width="13" height="34" rx="5" fill="#20262e"/>`;
+  // Tenis
+  const sh=it('shoes');
+  if(sh) s+=`<rect x="77" y="203" width="23" height="10" rx="5" fill="${sh.c}" stroke="#0d0f12" stroke-width="1"/><rect x="100" y="203" width="23" height="10" rx="5" fill="${sh.c}" stroke="#0d0f12" stroke-width="1"/>`;
   // Cuerpo (hoodie) + brazos + estampado del avatar
   s+=`<rect x="68" y="118" width="64" height="64" rx="16" fill="${hood}"/>
       <rect x="54" y="124" width="15" height="42" rx="7" fill="${hood}"/>
@@ -1371,8 +1388,10 @@ function vMono(){
   <div class="grid3">`;
   Object.entries(ITEMS).forEach(([k,it])=>{
     const owned=p.items.includes(k), eq=p.gear[it.slot]===k, locked=it.lvl&&lvl+1<it.lvl;
-    h+=`<div class="witem ${eq?'eq':''}"><div class="e">${it.e}</div><div class="n">${it.n}</div>`;
+    const ra=RAREZA[it.r||'comun'];
+    h+=`<div class="witem ${eq?'eq':''}" ${owned&&(it.r==='epica'||it.r==='legendaria')?`style="border-color:${ra.c}"`:''}><div class="e">${it.e}</div><div class="n">${it.n}</div><div style="font-size:8px;font-weight:900;letter-spacing:1px;color:${ra.c}">${ra.n.toUpperCase()}</div>`;
     if(locked) h+=`<div class="dim" style="font-size:10px">🔒 Nivel ${it.lvl}</div>`;
+    else if(!owned && it.cofre) h+=`<div class="dim" style="font-size:10px">🎁 Solo en cofres</div>`;
     else if(!owned) h+=`<div class="p">${it.p} 🍃</div><button class="btn sm pink" ${p.hojas<it.p?'disabled':''} onclick="buyItem('${k}')">COMPRAR</button>`;
     else if(eq) h+=`<button class="btn sm ghost" onclick="equipItem('${k}',false)">QUITAR</button>`;
     else h+=`<button class="btn sm" onclick="equipItem('${k}',true)">PONER</button>`;
@@ -1382,7 +1401,7 @@ function vMono(){
 }
 function buyItem(k){
   const it=ITEMS[k];
-  if(S.player.items.includes(k) || S.player.hojas<it.p || (it.lvl && levelOf(S.player.xp)+1<it.lvl)) return;
+  if(it.cofre || S.player.items.includes(k) || S.player.hojas<it.p || (it.lvl && levelOf(S.player.xp)+1<it.lvl)) return;
   S.player.hojas-=it.p; S.player.items.push(k); S.player.gear[it.slot]=k;
   save(); toast(`${it.e} ¡${it.n} equipado! Tu mono está más pro 😎`); render();
 }
