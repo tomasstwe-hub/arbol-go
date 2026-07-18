@@ -308,6 +308,7 @@ let S = null, STORAGE_OK = true;
 function load(){
   try{ S = JSON.parse(localStorage.getItem('arbolgo')||'null'); }catch(e){ S=null; STORAGE_OK=false; }
   if(!S) S = {player:null, trees:[], unlocked:['mezquite','paloverde','guamuchil'], log:[]};
+  S.baches = S.baches||[];
   if(S.player){
     initGear(S.player);
     // Migración: tótems ganados por árboles ya plantados
@@ -897,6 +898,171 @@ function adoptarArbol(){
   _adoptar=null; location.hash=''; save(); closeModal(); TAB='arboles'; render();
 }
 
+/* ================= RETO CALLEJERO (runner) ================= */
+const CALLES=['Náinari','Miguel Alemán','No Reelección','Sinaloa','Guerrero','Calle 200','Michoacán','Jalisco','Kino','Tabasco','Hidalgo','Allende'];
+let RUN=null;
+function abrirRunner(){
+  S.player.runner=S.player.runner||{best:0,date:null,hjDia:0,xpDia:0};
+  if(S.player.runner.date!==dayStr()){ S.player.runner.date=dayStr(); S.player.runner.hjDia=0; S.player.runner.xpDia=0; save(); }
+  openModal(`<div class="center"><h2 class="sec">🛹 RETO <span>CALLEJERO</span></h2>
+    <p style="font-size:13px;margin:8px 0">Esquiva los baches de Obregón en tu patineta — toca izquierda/derecha para cambiar de carril. Junta 🍃 en la calle (máx 30 al día).</p>
+    <div class="grid2" style="margin:10px 0">
+      <div class="stat"><div class="v">${S.player.runner.best} m</div><div class="l">tu récord</div></div>
+      <div class="stat"><div class="v cy">${(S.baches||[]).length}</div><div class="l">baches reportados</div></div>
+    </div>
+    <button class="btn full" onclick="closeModal();startRun()">🛹 ¡A PATINAR!</button><br><br>
+    <button class="btn full pink" onclick="reportarBache()">🕳️ REPORTAR UN BACHE REAL</button>
+    <p class="dim" style="font-size:11px;margin-top:8px">Los baches que la banda reporta salen en el MAPA y puedes copiar el reporte para mandarlo al municipio.</p></div>`);
+}
+function startRun(){
+  S.player.runner=S.player.runner||{best:0,date:null,hjDia:0,xpDia:0};
+  if(S.player.runner.date!==dayStr()){ S.player.runner.date=dayStr(); S.player.runner.hjDia=0; S.player.runner.xpDia=0; }
+  const ov=document.createElement('div'); ov.id='runOv';
+  ov.style.cssText='position:fixed;inset:0;background:#0d0f12;z-index:2500;overflow:hidden;touch-action:none';
+  ov.innerHTML='<canvas id="runCv" style="display:block;margin:0 auto"></canvas><div id="runHud" style="position:absolute;top:12px;left:0;right:0;text-align:center;color:#fff;font-weight:900;font-style:italic;font-size:18px;text-shadow:0 0 8px #000"></div>';
+  document.body.appendChild(ov);
+  const cv=document.getElementById('runCv');
+  const W=cv.width=Math.min(window.innerWidth,480), H=cv.height=window.innerHeight;
+  const x=cv.getContext('2d');
+  RUN={m:0, hoja:0, lane:0, lx:0, speed:0.55, obs:[], last:0, spawn:0, sign:0, calle:CALLES[Math.floor(Math.random()*CALLES.length)], alive:true};
+  const vpY=H*0.32;
+  const proj=(lane,z)=>{ const t=Math.pow(1-z,1.7); return {x:W/2+lane*(W*0.30)*t, y:vpY+(H*0.92-vpY)*t, s:t}; };
+  const mover=dx=>{ if(RUN&&RUN.alive) RUN.lane=Math.max(-1,Math.min(1,RUN.lane+dx)); };
+  const onTouch=e=>{ const cx=(e.touches?e.touches[0].clientX:e.clientX); mover(cx<window.innerWidth/2?-1:1); e.preventDefault(); };
+  const onKey=e=>{ if(e.key==='ArrowLeft')mover(-1); if(e.key==='ArrowRight')mover(1); };
+  ov.addEventListener('touchstart',onTouch,{passive:false}); ov.addEventListener('mousedown',onTouch);
+  window.addEventListener('keydown',onKey);
+  RUN.cleanup=()=>{ window.removeEventListener('keydown',onKey); ov.remove(); };
+  function frame(ts){
+    if(!RUN||!RUN.alive) return;
+    const dt=RUN.last?Math.min(0.05,(ts-RUN.last)/1000):0.016; RUN.last=ts;
+    RUN.speed=Math.min(1.5, 0.55+RUN.m/800);
+    RUN.m+=dt*60*RUN.speed*0.6;
+    RUN.lx+=(RUN.lane-RUN.lx)*Math.min(1,dt*10);
+    // spawns
+    RUN.spawn-=dt*RUN.speed;
+    if(RUN.spawn<=0){
+      const l=[-1,0,1][Math.floor(Math.random()*3)];
+      RUN.obs.push({lane:l, z:1, leaf:Math.random()<0.35, bache:(S.baches&&S.baches.length&&Math.random()<0.3)?S.baches[Math.floor(Math.random()*S.baches.length)].calle:null});
+      RUN.spawn=0.55+Math.random()*0.5;
+    }
+    RUN.obs.forEach(o=>o.z-=dt*RUN.speed*0.62);
+    // colisiones
+    for(const o of RUN.obs){
+      if(o.z<0.07 && o.z>-0.02 && o.lane===Math.round(RUN.lx)){
+        if(o.leaf){ if(!o.got){ o.got=true; RUN.hoja++; } }
+        else { RUN.alive=false; endRun(); return; }
+      }
+    }
+    RUN.obs=RUN.obs.filter(o=>o.z>-0.05&&!o.got);
+    // ===== dibujo =====
+    x.fillStyle='#0d0f12'; x.fillRect(0,0,W,H);
+    x.fillStyle='#151a20'; x.fillRect(0,0,W,vpY); // cielo nocturno
+    x.fillStyle='#ffe600'; for(let i=0;i<3;i++) x.fillRect((W*0.2+i*W*0.3+RUN.m)%W, vpY*0.3+i*17, 2,2); // estrellas
+    // carretera
+    x.fillStyle='#1c222b'; x.beginPath(); x.moveTo(W/2-W*0.02,vpY); x.lineTo(W/2+W*0.02,vpY); x.lineTo(W*1.05,H); x.lineTo(-W*0.05,H); x.fill();
+    // líneas de carril animadas
+    x.strokeStyle='#39ff14'; x.lineWidth=2;
+    [[-0.5],[0.5]].forEach(([ln])=>{ for(let i=0;i<12;i++){ const z=((i/12)+(RUN.m*0.02))%1; const a=proj(ln,z), b=proj(ln,Math.max(0,z-0.03));
+      x.globalAlpha=0.5*(1-z); x.beginPath(); x.moveTo(a.x,a.y); x.lineTo(b.x,b.y); x.stroke(); } });
+    x.globalAlpha=1;
+    // orillas: cactus y letrero de calle
+    x.font='20px Arial';
+    for(let i=0;i<5;i++){ const z=((i/5)+(RUN.m*0.013))%1; const L=proj(-1.9,z), R=proj(1.9,z);
+      x.globalAlpha=(1-z); x.font=(6+26*L.s)+'px Arial'; x.fillText(i%2?'🌵':'🌴', L.x, L.y); x.fillText(i%2?'🏠':'🌵', R.x, R.y); }
+    x.globalAlpha=1;
+    const zs=((RUN.m*0.008))%1; const sp2=proj(2.1,zs);
+    if(sp2.s>0.15){ x.fillStyle='#0a7d2c'; const sw=90*sp2.s; x.fillRect(sp2.x-sw/2,sp2.y-40*sp2.s,sw,16*sp2.s);
+      x.fillStyle='#fff'; x.font='bold '+(10*sp2.s)+'px Arial'; x.textAlign='center'; x.fillText('CALLE '+RUN.calle.toUpperCase(),sp2.x,sp2.y-28*sp2.s); x.textAlign='left'; }
+    // obstáculos (lejos → cerca)
+    RUN.obs.slice().sort((a,b)=>b.z-a.z).forEach(o=>{
+      const p=proj(o.lane,o.z);
+      if(o.leaf){ x.font=(8+26*p.s)+'px Arial'; x.textAlign='center'; x.fillText('🍃',p.x,p.y-6*p.s); x.textAlign='left'; }
+      else{
+        x.fillStyle='#05070a'; x.beginPath(); x.ellipse(p.x,p.y,44*p.s,14*p.s,0,0,7); x.fill();
+        x.strokeStyle='#3a3126'; x.lineWidth=2*p.s; x.stroke();
+        if(o.bache&&p.s>0.5){ x.fillStyle='#ff3b3b'; x.font='bold '+(9*p.s)+'px Arial'; x.textAlign='center'; x.fillText('🕳️ '+o.bache,p.x,p.y-18*p.s); x.textAlign='left'; }
+      }
+    });
+    // jugador: mini-mono en patineta
+    const pp=proj(RUN.lx,0.02), g=S.player.gear;
+    const hood=g.hoodie&&ITEMS[g.hoodie]?ITEMS[g.hoodie].c:'#3a4250';
+    const skc=g.skate&&ITEMS[g.skate]?ITEMS[g.skate].c:'#8b97a5';
+    x.save(); x.translate(pp.x,pp.y);
+    x.fillStyle='rgba(0,0,0,.5)'; x.beginPath(); x.ellipse(0,6,34,7,0,0,7); x.fill();
+    x.fillStyle=skc; x.fillRect(-30,-4,60,7);
+    x.fillStyle='#ffe600'; x.beginPath(); x.arc(-18,6,5,0,7); x.arc(18,6,5,0,7); x.fill();
+    x.fillStyle='#20262e'; x.fillRect(-10,-28,8,24); x.fillRect(3,-28,8,24);
+    const sh=g.shoes&&ITEMS[g.shoes]; if(sh){ x.fillStyle=sh.c; x.fillRect(-13,-9,14,6); x.fillRect(1,-9,14,6); }
+    x.fillStyle=hood; x.fillRect(-16,-62,32,36);
+    x.font='14px Arial'; x.textAlign='center'; x.fillText(S.player.avatar,0,-38);
+    x.fillStyle='#e8b98a'; x.beginPath(); x.arc(0,-72,13,0,7); x.fill();
+    const cap=g.cap&&ITEMS[g.cap]; if(cap&&cap.c){ x.fillStyle=cap.c; x.beginPath(); x.arc(0,-76,13,Math.PI,0); x.fill(); x.fillRect(-15,-78,30,4); }
+    x.restore(); x.textAlign='left';
+    document.getElementById('runHud').textContent=`${Math.floor(RUN.m)} m · 🍃 ${RUN.hoja}`;
+    requestAnimationFrame(frame);
+  }
+  RUN.step=frame;
+  requestAnimationFrame(frame);
+}
+function endRun(){
+  const m=Math.floor(RUN.m), hoja=RUN.hoja;
+  RUN.cleanup();
+  const r=S.player.runner;
+  if(m>r.best) r.best=m;
+  const hjOk=Math.min(hoja, 30-r.hjDia), xpG=Math.min(Math.floor(m/50), 20-r.xpDia);
+  r.hjDia+=Math.max(0,hjOk); r.xpDia+=Math.max(0,xpG);
+  if(hjOk>0||xpG>0) addXP(Math.max(0,xpG), Math.max(0,hjOk));
+  save();
+  openModal(`<div class="center"><div style="font-size:56px">💥</div>
+    <h2 class="sec" style="text-align:center">¡BACHAZO!</h2>
+    <div class="grid3" style="margin:12px 0">
+      <div class="stat"><div class="v">${m} m</div><div class="l">recorrido</div></div>
+      <div class="stat"><div class="v cy">${r.best} m</div><div class="l">récord</div></div>
+      <div class="stat"><div class="v pk">+${Math.max(0,hjOk)}🍃 +${Math.max(0,xpG)}XP</div><div class="l">premio</div></div>
+    </div>
+    ${(hjOk<hoja||xpG<Math.floor(m/50))?'<p class="dim" style="font-size:11px">Llegaste al límite diario de premios — mañana hay más 😉</p>':''}
+    <button class="btn full" onclick="closeModal();startRun()">🛹 OTRA VUELTA</button><br><br>
+    <button class="btn full ghost" onclick="closeModal();render()">SALIR</button></div>`);
+  RUN=null;
+}
+/* ---- Baches reales ---- */
+let bacheLoc=null;
+function reportarBache(){
+  bacheLoc=null;
+  openModal(`<h2 class="sec">🕳️ REPORTAR <span>BACHE</span></h2>
+    <p style="font-size:13px;margin:8px 0">Un bache real de tu colonia. Sale en el MAPA del juego y genera un reporte listo para mandar al municipio. +15 XP por ayudar a tu ciudad.</p>
+    <label>Calle y cruce</label>
+    <input id="bCalle" placeholder="Ej. Náinari y Kino" maxlength="60">
+    <label>Gravedad</label>
+    <select id="bGrav"><option>🕳️ Leve — se brinca</option><option>🕳️🕳️ Medio — truena llantas</option><option>🕳️🕳️🕳️ Cráter — se pierde un carro</option></select>
+    <button class="btn sm ghost" onclick="gpsBache()">📡 USAR MI GPS</button>
+    <span class="dim" id="bLoc" style="font-size:11px;margin-left:6px">Sin ubicación</span><br><br>
+    <button class="btn full" onclick="guardarBache()">🕳️ REPORTAR (+15 XP)</button>`);
+}
+function gpsBache(){
+  if(!navigator.geolocation){ toast('⚠️ GPS no disponible'); return; }
+  toast('📡 Buscando señal…');
+  navigator.geolocation.getCurrentPosition(p=>{ bacheLoc=[p.coords.latitude,p.coords.longitude];
+    $('#bLoc').textContent=`📍 ${bacheLoc[0].toFixed(4)}, ${bacheLoc[1].toFixed(4)}`; },()=>toast('⚠️ Sin GPS — describe bien el cruce'));
+}
+function guardarBache(){
+  const calle=$('#bCalle').value.trim();
+  if(!calle){ toast('⚠️ Di en qué calle está'); return; }
+  S.baches=S.baches||[];
+  S.baches.push({id:Date.now(), calle, grav:$('#bGrav').value, lat:bacheLoc?bacheLoc[0]:null, lng:bacheLoc?bacheLoc[1]:null, fecha:Date.now(), por:S.player.name});
+  const hoy=S.baches.filter(b=>dayStr(new Date(b.fecha))===dayStr()&&b.por===S.player.name).length;
+  if(hoy<=3) addXP(15,5);
+  save(); closeModal();
+  toast(hoy<=3?`🕳️ +15 XP · ¡Bache en ${calle} reportado! Ahora esquívalo en el juego 😉`:`🕳️ Reportado (premio: máx 3 al día)`);
+  render();
+}
+function copiarBache(id){
+  const b=S.baches.find(x=>x.id===id);
+  const txt=`🕳️ REPORTE DE BACHE (vía ÁRBOL GO)\nCalle: ${b.calle}\nGravedad: ${b.grav}\n${b.lat?`Ubicación: https://maps.google.com/?q=${b.lat},${b.lng}\n`:''}Fecha: ${new Date(b.fecha).toLocaleDateString('es-MX')}\nReportado por la comunidad de ÁRBOL GO 🌳`;
+  navigator.clipboard.writeText(txt).then(()=>toast('📋 Reporte copiado — mándalo al municipio o al grupo de la colonia'));
+}
+
 /* ================= COMPARTIR MONO ================= */
 function monoShareURL(){
   const p=S.player;
@@ -1024,6 +1190,11 @@ function vMapa(){
       const st=statusOf(t), sp=SPECIES[t.especie];
       L.circleMarker([t.lat,t.lng],{radius:10,color:cols[st.k],fillColor:cols[st.k],fillOpacity:.7})
         .addTo(mapObj).bindPopup(`<b>${esc(t.nombre)}</b><br>${sp.emoji} ${sp.nombre}<br>${st.txt}<br>💧 ${t.riegos.length} riegos · ${fmtDias((Date.now()-t.fecha)/DAY)}`);
+    });
+    (S.baches||[]).forEach(b=>{
+      if(b.lat===null) return;
+      L.circleMarker([b.lat,b.lng],{radius:8,color:'#8b5a2b',fillColor:'#3a2c1a',fillOpacity:.9})
+        .addTo(mapObj).bindPopup(`<b>🕳️ Bache</b><br>${esc(b.calle)}<br>${esc(b.grav)}<br><span style="font-size:11px">por ${esc(b.por)} · ${new Date(b.fecha).toLocaleDateString('es-MX')}</span><br><button onclick="copiarBache(${b.id})" style="margin-top:4px;cursor:pointer">📋 Copiar reporte</button>`);
     });
   }catch(e){ $('#map').innerHTML='<p class="dim center" style="padding:30px">🛜 El mapa necesita internet. Tus árboles siguen guardados en MI CREW.</p>'; }
 }
@@ -1328,7 +1499,10 @@ function vMono(){
       <div class="goalbar"><div class="xpbar"><i style="width:${pct}%"></i></div><div class="dim" style="font-size:10px">META DE HOY: ${Math.min(p.dayXP,META_DIA)}/${META_DIA} XP</div></div>
     </div>
     <p class="dim" style="margin-bottom:10px">Toca a tu mono para que te hable · Gana ${META_DIA} XP diarios o pierdes la racha 🔥</p>
-    <button class="btn sm pink" onclick="compartirMono()" style="margin-bottom:14px">📣 PRESUMIR MI MONO</button>
+    <div class="trow" style="justify-content:center;margin-bottom:14px">
+      <button class="btn sm" style="background:var(--yellow);color:#111" onclick="abrirRunner()">🛹 RETO CALLEJERO</button>
+      <button class="btn sm pink" onclick="compartirMono()">📣 PRESUMIR</button>
+    </div>
   </div>
   ${(()=>{
     const pa=petActiva();
