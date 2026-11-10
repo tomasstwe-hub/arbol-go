@@ -9,9 +9,9 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="anonymous">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js" crossorigin="anonymous"></script>
 <style>
 :root{
   --bg:#0d0f12; --panel:#171a20; --panel2:#1f242c; --line:#2b323d;
@@ -338,19 +338,27 @@ function load(){
     initGear(S.player);
     // Migración: tótems ganados por árboles ya plantados
     S.trees.forEach(t=>{ if(!S.player.totems.includes(t.especie)) S.player.totems.push(t.especie); });
-    if(S.player.dayDate!==dayStr()){ S.player.dayXP=0; S.player.dayDate=dayStr(); }
-    // Racha rota: no cumplió la meta ayer
-    if(S.player.lastDay && S.player.lastDay<yesterdayStr() && S.player.strk>0){
-      S.player.prevStrk=S.player.strk; S.player.strk=0; S.player.strkLost=true;
-    }
-    // Aniversario semanal con el compa: +15 lazo por cada semana juntos
-    const pk=S.player.petActivo;
-    if(pk && S.player.pets[pk]){
-      const p=S.player.pets[pk];
-      if(!p.desde) p.desde=Date.now();
-      const sem=Math.floor((Date.now()-p.desde)/(7*DAY));
-      if(sem>(p.aniv||0)){
-        p.bond+=15*(sem-(p.aniv||0)); p.aniv=sem;
+    cambioDeDia();
+  }
+}
+// Se corre al abrir y cada vez que la app vuelve al frente: una PWA puede quedarse abierta varios días
+function cambioDeDia(){
+  const pl=S&&S.player; if(!pl) return;
+  if(pl.dayDate!==dayStr()){ pl.dayXP=0; pl.dayDate=dayStr(); }
+  // Racha rota: no cumplió la meta ayer
+  if(pl.lastDay && pl.lastDay<yesterdayStr() && pl.strk>0){
+    pl.prevStrk=pl.strk; pl.strk=0; pl.strkLost=true;
+  }
+  // Aniversario semanal con el compa: +15 lazo, solo si lo has cuidado. Las semanas de abandono no se cobran después.
+  const pk=pl.petActivo;
+  if(pk && pl.pets[pk]){
+    const p=pl.pets[pk];
+    if(!p.desde) p.desde=Date.now();
+    const sem=Math.floor((Date.now()-p.desde)/(7*DAY));
+    if(sem>(p.aniv||0)){
+      p.aniv=sem;
+      if(petEstado(p)!=='triste'){
+        p.bond+=15;
         setTimeout(()=>toast(`${MASCOTAS[pk].e} ¡${p.nombre||MASCOTAS[pk].n} cumple ${sem} semana${sem>1?'s':''} contigo! +15 lazo de aniversario 🎂🐾`),1000);
       }
     }
@@ -366,7 +374,57 @@ load();
 
 /* ================= HELPERS ================= */
 const $ = s=>document.querySelector(s);
-const esc = s=>(s||'').replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+const esc = s=>String(s==null?'':s).replace(/[<>&"']/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c]));
+// Todo lo que llega de una liga compartida o de un archivo importado es dato ajeno: se valida antes de usarse
+const num = (x,def)=>{ const n=Number(x); return Number.isFinite(n)?n:(def||0); };
+const txt = (x,max)=>String(x==null?'':x).slice(0,max||60);
+const FOLIO_OK = /^[A-Z0-9-]{3,12}$/;
+function leerHash(){ return JSON.parse(decodeURIComponent(escape(atob(location.hash.slice(3))))); }
+function sanearRonda(ro, fallbackNombre, fallbackInicio){
+  if(!ro || !Array.isArray(ro.g)) return {g:[txt(fallbackNombre,20)||'Guardián'], i:num(fallbackInicio,Date.now()), av:{}};
+  const g=ro.g.slice(0,12).map(n=>txt(n,20)).filter(Boolean);
+  const av={};
+  if(ro.av && typeof ro.av==='object') g.forEach(n=>{ if(ro.av[n]) av[n]=txt(ro.av[n],8); });
+  return {g:g.length?g:[txt(fallbackNombre,20)||'Guardián'], i:num(ro.i,Date.now()), av};
+}
+function sanearArbol(t){
+  if(!t || !(t.especie in SPECIES)) return null;
+  const o={id:num(t.id,Date.now()+Math.floor(Math.random()*1000)), especie:t.especie, nombre:txt(t.nombre,40)||'Árbol',
+    lat:num(t.lat,OBREGON[0]), lng:num(t.lng,OBREGON[1]), fecha:num(t.fecha,Date.now()),
+    riegos:Array.isArray(t.riegos)?t.riegos.map(r=>({f:num(r&&r.f,Date.now())})):[],
+    foto:(typeof t.foto==='string' && t.foto.indexOf('data:image/')===0)?t.foto:null,
+    condicion:t.condicion?txt(t.condicion,60):null};
+  if(t.chk) o.chk=txt(t.chk,10);
+  if(t.teamXP) o.teamXP=num(t.teamXP);
+  if(t.ronda) o.ronda=sanearRonda(t.ronda);
+  return o;
+}
+function sanearEstado(x){
+  if(!x || typeof x!=='object' || !x.player || typeof x.player!=='object' || !Array.isArray(x.trees)) return null;
+  const p=x.player;
+  ['xp','hojas','creditos','racha','strk','prevStrk','dayXP'].forEach(k=>{ p[k]=Math.max(0,num(p[k])); });
+  p.name=txt(p.name,20)||'Jugador'; p.avatar=txt(p.avatar,8)||'🦌';
+  p.items=Array.isArray(p.items)?p.items.filter(k=>k in ITEMS):['skate_base'];
+  if(p.gear && typeof p.gear==='object') Object.keys(p.gear).forEach(k=>{ if(!(p.gear[k] in ITEMS)) p.gear[k]=null; }); else delete p.gear;
+  p.totems=Array.isArray(p.totems)?p.totems.filter(k=>k in SPECIES):[];
+  const pets={};
+  if(p.pets && typeof p.pets==='object') Object.keys(p.pets).forEach(k=>{ const q=p.pets[k];
+    if(k in MASCOTAS && q) pets[k]={bond:Math.max(0,num(q.bond)), fed:q.fed?txt(q.fed,10):null, desde:num(q.desde,Date.now()), conf:num(q.conf), aniv:num(q.aniv), nombre:q.nombre?txt(q.nombre,16):null}; });
+  p.pets=pets; if(!(p.petActivo in pets)) p.petActivo=null;
+  p.cupones=Array.isArray(p.cupones)?p.cupones.map(c=>({id:num(c.id,Date.now()), e:txt(c.e,8), premio:txt(c.premio,60), lugar:txt(c.lugar,60), folio:txt(c.folio,12), fecha:num(c.fecha), exp:num(c.exp), usado:!!c.usado, usadoF:num(c.usadoF)})):[];
+  p.vales=Array.isArray(p.vales)?p.vales.filter(v=>v && v.especie in SPECIES).map(v=>({id:num(v.id,Date.now()), folio:txt(v.folio,12), especie:v.especie, fecha:num(v.fecha), exp:num(v.exp), entregado:!!v.entregado, entF:num(v.entF), plantado:!!v.plantado})):[];
+  if(p.runner) p.runner={best:Math.max(0,num(p.runner.best)), date:p.runner.date?txt(p.runner.date,10):null, hjDia:Math.max(0,num(p.runner.hjDia)), xpDia:Math.max(0,num(p.runner.xpDia))};
+  if(p.trivia) p.trivia={date:txt(p.trivia.date,10), done:Math.max(0,num(p.trivia.done)), ok:Math.max(0,num(p.trivia.ok))};
+  x.trees=x.trees.map(sanearArbol).filter(Boolean);
+  x.unlocked=Array.isArray(x.unlocked)?x.unlocked.filter(k=>k in SPECIES):[];
+  ['mezquite','paloverde','guamuchil'].forEach(k=>{ if(!x.unlocked.includes(k)) x.unlocked.push(k); });
+  x.baches=Array.isArray(x.baches)?x.baches.map(b=>({id:num(b.id,Date.now()), calle:txt(b.calle,60), grav:txt(b.grav,60), lat:b.lat==null?null:num(b.lat), lng:b.lng==null?null:num(b.lng), fecha:num(b.fecha,Date.now()), por:txt(b.por,20)})):[];
+  if(x.vivero && typeof x.vivero==='object'){
+    const st={}; if(x.vivero.stock) Object.keys(x.vivero.stock).forEach(k=>{ if(k in SPECIES) st[k]=Math.max(0,num(x.vivero.stock[k])); });
+    x.vivero={stock:st, entregas:Array.isArray(x.vivero.entregas)?x.vivero.entregas.filter(e=>e && FOLIO_OK.test(e.folio) && e.esp in SPECIES).map(e=>({folio:e.folio, esp:e.esp, fecha:num(e.fecha)})):[]};
+  } else delete x.vivero;
+  return x;
+}
 function toast(msg){ const t=document.createElement('div'); t.className='toast'; t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(),2200); }
 function fmtDias(d){ if(d<1) return 'hoy'; if(d<30) return Math.floor(d)+' días'; if(d<365) return (d/30.4).toFixed(1)+' meses'; return (d/365).toFixed(1)+' años'; }
 
@@ -536,11 +594,11 @@ function vArboles(){
         <button class="btn sm ghost" onclick="rondaModal(${t.id})">🤝 RONDA</button>
       </div>
       <div class="detail" id="det${t.id}" style="display:none">
-        ☀️ Horas de luz: <b>${cl.luz.toLocaleString()} h</b> &nbsp; 🥵 Horas de calor (+35°C): <b>${cl.calor.toLocaleString()} h</b> &nbsp; 🥶 Horas frío (-7°C): <b>${cl.frio} h</b><br>
+        ☀️ Horas de luz: <b>${cl.luz.toLocaleString()} h</b> &nbsp; 🥵 Horas de calor (más de 35°C): <b>${cl.calor.toLocaleString()} h</b> &nbsp; 🥶 Horas frío (menos de 7°C): <b>${cl.frio} h</b><br>
         🌍 CO₂ secuestrado: <b>${co2Of(t).toFixed(1)} kg</b> &nbsp; 🍃 Sombra aportada: <b>${canopyOf(t).toFixed(1)} m²</b><br>
         📍 ${t.lat.toFixed(5)}, ${t.lng.toFixed(5)} &nbsp; 🗓️ Plantado: <b>${new Date(t.fecha).toLocaleDateString('es-MX')}</b><br>
-        💧 Riego ideal: cada <b>${st.need.toFixed(1)} días</b> en esta temporada${t.condicion?`<br>🩺 Última condición: <b>${t.condicion}</b>`:''}
-        ${t.foto?`<img class="foto" src="${t.foto}">`:''}
+        💧 Riego ideal: cada <b>${st.need.toFixed(1)} días</b> en esta temporada${t.condicion?`<br>🩺 Última condición: <b>${esc(t.condicion)}</b>`:''}
+        ${t.foto?`<img class="foto" src="${esc(t.foto)}">`:''}
       </div>
     </div>`;
   });
@@ -641,37 +699,44 @@ function checkin(id){
 }
 function doCheckin(id){
   const t = S.trees.find(x=>x.id===id);
-  t.condicion = $('#cond').value;
-  t.chk = dayStr();
+  if(!t || t.chk===dayStr()) return;
+  const cond = $('#cond').value;
   const f = $('#ft').files[0];
   const esVigia = rolDe(t,S.player.name)==='📸 Vigilante';
+  let hecho=false, fotoFallo=false;
   const fin = ()=>{
+    if(hecho) return; hecho=true;
+    t.condicion = cond;
+    t.chk = dayStr();
     const bc=petBoost('checkin')*2, beq=petBoost('ronda')*2;
     if(esVigia){ t.teamXP=(t.teamXP||0)+10+beq; addXP(XP_CHECKIN+10+bc,10); }
     else addXP(XP_CHECKIN+bc,5);
     save(); closeModal();
-    toast(esVigia?`📸 ¡CHAMBA DE VIGILANTE CUMPLIDA! +${XP_CHECKIN+10+bc} XP · +${10+beq} XP de equipo 🤝${bc?' · 🦎🐾':''}`:`📸 +${XP_CHECKIN+bc} XP · Monitoreo registrado${bc?' · 🦎 +'+bc+' XP de tu iguana 🐾':''}`);
+    toast(esVigia?`📸 ¡CHAMBA DE VIGILANTE CUMPLIDA! +${XP_CHECKIN+10+bc} XP · +${10+beq} XP de equipo 🤝${bc?' · 🦎🐾':''}`:`📸 +${XP_CHECKIN+bc} XP · Monitoreo registrado${bc?' · 🦎 +'+bc+' XP de tu iguana 🐾':''}`+(fotoFallo?' · 📷 la foto no se pudo leer, se guardó sin imagen':''));
     render();
   };
   if(f){
+    // Si la foto no se puede leer (formato raro, archivo dañado), el check-in cuenta igual, sin foto
+    const sinFoto=()=>{ fotoFallo=true; fin(); };
     const img=new Image(), r=new FileReader();
-    r.onload=e=>{ img.onload=()=>{ const c=document.createElement('canvas'); const k=240/Math.max(img.width,img.height);
+    img.onerror=sinFoto; r.onerror=sinFoto;
+    r.onload=e=>{ img.onload=()=>{ try{ const c=document.createElement('canvas'); const k=240/Math.max(img.width,img.height);
       c.width=img.width*k; c.height=img.height*k; c.getContext('2d').drawImage(img,0,0,c.width,c.height);
-      t.foto=c.toDataURL('image/jpeg',.6); fin(); }; img.src=e.target.result; };
+      t.foto=c.toDataURL('image/jpeg',.6); }catch(x){} fin(); }; img.src=e.target.result; };
     r.readAsDataURL(f);
   } else fin();
 }
 
 function vPlantar(){
   let h = `<h2 class="sec">PLANTAR <span>NUEVO</span> 🌱</h2>`;
+  const valesPend=(S.player.vales||[]).filter(v=>!v.entregado && Date.now()<=v.exp);
+  const valeCard=valesPend.length?`<div class="card" style="display:flex;align-items:center;gap:10px"><span style="font-size:26px">🚚</span><div style="flex:1"><b>Vale pendiente: ${SPECIES[valesPend[0].especie].emoji} ${SPECIES[valesPend[0].especie].nombre}</b><div class="dim" style="font-size:11px">Folio ${esc(valesPend[0].folio)} — pasa por él a la oficina</div></div><button class="btn sm" onclick="verVale(${valesPend[0].id})">VER</button></div>`:'';
   if(S.player.creditos<1){
-    h += `<div class="card center"><div style="font-size:44px">😬</div><p style="margin:10px 0;font-weight:800">Sin créditos de árbol.</p><p class="dim">Junta 🍃 regando y monitoreando tu crew, y cámbialas en la TIENDA por más árboles.</p><br><button class="btn pink" onclick="TAB='tienda';render()">🛒 IR A LA TIENDA</button></div>`;
+    h += valeCard+`<div class="card center"><div style="font-size:44px">😬</div><p style="margin:10px 0;font-weight:800">Sin créditos de árbol.</p><p class="dim">Junta 🍃 regando y monitoreando tu crew, y cámbialas en la TIENDA por más árboles.</p><br><button class="btn pink" onclick="TAB='tienda';render()">🛒 IR A LA TIENDA</button></div>`;
     $('#view').innerHTML=h; return;
   }
-  const valesPend=(S.player.vales||[]).filter(v=>!v.entregado && Date.now()<=v.exp);
   h += `<div class="banner ok">🎟️ Tienes <b>${S.player.creditos} crédito${S.player.creditos>1?'s':''}</b> de árbol. Plantar = +${XP_PLANT} XP +${HJ_PLANT}🍃</div>
-  ${valesPend.length?`<div class="card" style="display:flex;align-items:center;gap:10px"><span style="font-size:26px">🚚</span><div style="flex:1"><b>Vale pendiente: ${SPECIES[valesPend[0].especie].emoji} ${SPECIES[valesPend[0].especie].nombre}</b><div class="dim" style="font-size:11px">Folio ${valesPend[0].folio} — pasa por él a la oficina</div></div><button class="btn sm" onclick="verVale(${valesPend[0].id})">VER</button></div>`
-  :`<button class="btn sm ghost" onclick="pedirArbol()" style="margin-bottom:12px">🚚 ¿AÚN NO TIENES TU ARBOLITO? PÍDELO AQUÍ</button>`}
+  ${valeCard||`<button class="btn sm ghost" onclick="pedirArbol()" style="margin-bottom:12px">🚚 ¿AÚN NO TIENES TU ARBOLITO? PÍDELO AQUÍ</button>`}
   <div class="card">
     <label>Especie nativa</label>
     <div class="spick" id="spick">${S.unlocked.map(k=>{const sp=SPECIES[k];return `<div class="sp ${k===plantSp?'sel':''}" data-k="${k}"><div class="e">${sp.emoji}</div><div class="n">${sp.nombre}</div><div class="s">riego c/${sp.riego}d</div></div>`;}).join('')}</div>
@@ -716,6 +781,10 @@ function doPlant(){
   if(!plantLoc){ toast('⚠️ Marca dónde lo plantaste'); return; }
   S.trees.push({id:Date.now(), especie:plantSp, nombre:nom, lat:plantLoc[0], lng:plantLoc[1], fecha:Date.now(), riegos:[{f:Date.now()}], foto:null, condicion:null});
   S.player.creditos--;
+  // Si este árbol salió de un vale ya recogido, ese vale queda cerrado (misma especie primero)
+  const abiertos=valesSinPlantar();
+  const vale=abiertos.find(v=>v.especie===plantSp)||abiertos[0];
+  if(vale) vale.plantado=true;
   const nuevoTotem = !S.player.totems.includes(plantSp);
   if(nuevoTotem) S.player.totems.push(plantSp);
   const bp=petBoost('plantar')*3;
@@ -823,7 +892,9 @@ function descargarPlaca(id){
 }
 function visitorHash(){
   try{
-    const d=JSON.parse(decodeURIComponent(escape(atob(location.hash.slice(3)))));
+    const d=leerHash();
+    d.f=num(d.f,Date.now()); d.n=txt(d.n,40); d.p=txt(d.p,20); d.av=txt(d.av,8); d.la=num(d.la); d.lo=num(d.lo);
+    if(d.ro) d.ro=sanearRonda(d.ro, d.p, d.f);
     const sp=SPECIES[d.e]||SPECIES.mezquite;
     const fake={especie:d.e in SPECIES?d.e:'mezquite', fecha:d.f, riegos:[]};
     const age=(Date.now()-d.f)/DAY;
@@ -831,7 +902,7 @@ function visitorHash(){
       <div style="font-size:52px">${sp.emoji}</div>
       <h2 class="sec" style="text-align:center">${esc(d.n).toUpperCase()}</h2>
       <div class="dim">${sp.nombre} · <i>${sp.sci}</i></div>
-      <p style="margin:12px 0;font-size:14px">Plantado por <b>${d.av||'🌱'} ${esc(d.p)}</b><br><span class="dim">el ${new Date(d.f).toLocaleDateString('es-MX',{day:'numeric',month:'long',year:'numeric'})}</span></p>
+      <p style="margin:12px 0;font-size:14px">Plantado por <b>${esc(d.av)||'🌱'} ${esc(d.p)}</b><br><span class="dim">el ${new Date(d.f).toLocaleDateString('es-MX',{day:'numeric',month:'long',year:'numeric'})}</span></p>
     </div>
     <div class="detail" style="border-top:1px dashed var(--line)">
       🕐 <b>Edad:</b> ${fmtDias(age)}<br>
@@ -841,7 +912,7 @@ function visitorHash(){
       ⏳ <b>Puede vivir:</b> ${sp.vida}<br>
       📍 <a href="https://www.openstreetmap.org/?mlat=${+d.la||0}&mlon=${+d.lo||0}#map=18/${+d.la||0}/${+d.lo||0}" target="_blank" style="color:var(--cyan)">Ver su ubicación en el mapa</a>
     </div>
-    ${d.ro&&d.ro.g&&d.ro.g.length?`<div class="banner ok" style="text-align:center;margin-top:10px">🤝 Esta semana lo cuida: <b>${esc(d.ro.g[Math.floor((Date.now()-d.ro.i)/(7*DAY))%d.ro.g.length])}</b></div>`:''}
+    ${d.ro?`<div class="banner ok" style="text-align:center;margin-top:10px">🤝 Esta semana lo cuida: <b>${esc(guardiaDe({ronda:d.ro}))}</b></div>`:''}
     <p style="font-size:13px;background:var(--panel2);border-radius:10px;padding:10px;margin:10px 0">${sp.totem.e} ${sp.totem.rel}</p>
     <button class="btn full" onclick="location.hash='';closeModal();">🎮 ¡QUIERO PLANTAR EL MÍO!</button>`);
   }catch(e){ location.hash=''; if(!S.player) onboarding(); }
@@ -864,7 +935,7 @@ function rondaModal(id){
     <p style="font-size:13px;margin:8px 0">Las chambas rotan solas cada semana: <b>💧 Regador</b> riega (+25 XP), <b>📸 Vigilante</b> hace el check-in (+30 XP), <b>🍃 Apoyo</b> echa ojo. Cumplir tu chamba suma <b>XP de equipo</b> al árbol.</p>
     <div class="banner ok" style="text-align:center">${med.e} <b>${med.n}</b> · ${t.teamXP||0} XP de equipo${med.next?` · faltan ${med.next-(t.teamXP||0)} para subir`:' · ¡MÁXIMO!'}</div>
     ${t.ronda.g.map((n,i)=>{
-      const rol=rolDe(t,n), av=t.ronda.av[n]||'🌱';
+      const rol=rolDe(t,n), av=esc(t.ronda.av[n]||'🌱');
       return `<div style="background:var(--panel2);border-radius:10px;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;margin-bottom:6px${rol==='💧 Regador'?';border:1px solid var(--cyan)':''}">
         <span style="font-size:20px">${av}</span>
         <span style="flex:1;margin-left:8px">${esc(n)}${n===S.player.name?' <span class="dim">(tú)</span>':''}<br><b style="font-size:11px;color:var(--neon)">${rol}</b></span>
@@ -893,10 +964,13 @@ function quitarGuardian(id,i){
 let _adoptar=null;
 function visitorTreeHash(){
   try{
-    const d=JSON.parse(decodeURIComponent(escape(atob(location.hash.slice(3)))));
+    const d=leerHash();
+    d.id=num(d.id,Date.now()); d.f=num(d.f,Date.now()); d.n=txt(d.n,40)||'Árbol'; d.p=txt(d.p,20)||'Guardián';
+    d.la=num(d.la,OBREGON[0]); d.lo=num(d.lo,OBREGON[1]); d.tx=Math.max(0,num(d.tx));
+    d.ro=sanearRonda(d.ro, d.p, d.f);
     _adoptar=d;
     const sp=SPECIES[d.e]||SPECIES.mezquite;
-    const cur=d.ro&&d.ro.g&&d.ro.g.length ? d.ro.g[Math.floor((Date.now()-d.ro.i)/(7*DAY))%d.ro.g.length] : null;
+    const cur=guardiaDe({ronda:d.ro});
     openModal(`<div class="center">
       <div style="font-size:50px">${sp.emoji}</div>
       <h2 class="sec" style="text-align:center">${esc(d.n).toUpperCase()}</h2>
@@ -914,8 +988,7 @@ function adoptarArbol(){
   if(S.trees.some(t=>t.id===d.id)){ toast('🌳 Este árbol ya está en tu crew'); }
   else{
     const esp = (d.e in SPECIES)?d.e:'mezquite';
-    const t={id:d.id, especie:esp, nombre:d.n, lat:+d.la||OBREGON[0], lng:+d.lo||OBREGON[1], fecha:d.f, riegos:[{f:Date.now()}], foto:null, condicion:null, ronda:d.ro||{g:[d.p],i:d.f}, teamXP:d.tx||0};
-    t.ronda.av=t.ronda.av||{};
+    const t={id:d.id, especie:esp, nombre:d.n, lat:d.la, lng:d.lo, fecha:d.f, riegos:[{f:Date.now()}], foto:null, condicion:null, ronda:d.ro, teamXP:d.tx};
     if(!t.ronda.g.includes(S.player.name)) t.ronda.g.push(S.player.name);
     t.ronda.av[S.player.name]=S.player.avatar;
     S.trees.push(t);
@@ -928,17 +1001,23 @@ function adoptarArbol(){
 
 /* ================= VALES DE ÁRBOL (entrega física) ================= */
 const OFICINA='Oficina ÁRBOL GO · (pon aquí tu dirección y horario)';
+// Árboles ya recogidos en la oficina que todavía no se registran como plantados: cada uno aparta un crédito
+function valesSinPlantar(){ return (S.player.vales||[]).filter(v=>v.entregado && !v.plantado); }
 function pedirArbol(){
   S.player.vales=S.player.vales||[];
   const pend=S.player.vales.filter(v=>!v.entregado && Date.now()<=v.exp);
   if(pend.length){ verVale(pend[0].id); return; }
   if(S.player.creditos<1){ toast('🎟️ Necesitas un crédito de árbol para pedirlo'); return; }
+  const sinPlantar=valesSinPlantar().length;
+  if(S.player.creditos<=sinPlantar){ toast(`🌱 Primero planta y registra ${sinPlantar===1?'el árbol que ya recogiste':'los '+sinPlantar+' árboles que ya recogiste'} — luego pides otro`); return; }
   openModal(`<h2 class="sec">🚚 PEDIR MI <span>ÁRBOL</span></h2>
     <p style="font-size:13px;margin:8px 0">Elige la especie y te damos un <b>vale con folio</b>. Preséntalo para recoger tu arbolito en:<br><b style="color:var(--neon)">${OFICINA}</b></p>
     <p class="dim" style="font-size:11px;margin-bottom:10px">El vale vale 30 días · Solo puedes tener un vale pendiente a la vez · Tu crédito se usa al registrar la plantada, como siempre.</p>
     ${S.unlocked.map(k=>`<button class="btn full ghost" style="margin-bottom:8px;text-align:left;font-style:normal" onclick="generarVale('${k}')">${SPECIES[k].emoji} ${SPECIES[k].nombre} <span class="dim" style="font-size:11px">· ${SPECIES[k].sci}</span></button>`).join('')}`);
 }
 function generarVale(esp){
+  S.player.vales=S.player.vales||[];
+  if(!(esp in SPECIES) || S.player.creditos<=valesSinPlantar().length || S.player.vales.some(x=>!x.entregado && Date.now()<=x.exp)) return;
   const v={id:Date.now(), folio:'VA-'+Math.random().toString(36).slice(2,7).toUpperCase(), especie:esp, fecha:Date.now(), exp:Date.now()+30*DAY, entregado:false};
   S.player.vales.push(v); save();
   toast('🚚 ¡Vale generado! Pasa por tu árbol 🌱');
@@ -950,7 +1029,7 @@ function verVale(id){
   openModal(`<div class="center">
     <div style="font-size:56px">${sp.emoji}</div>
     <h2 class="sec" style="text-align:center">VALE POR UN <span>${sp.nombre.toUpperCase()}</span></h2>
-    <p style="font-size:22px;font-weight:900;letter-spacing:2px;margin:8px 0">FOLIO: ${v.folio}</p>
+    <p style="font-size:22px;font-weight:900;letter-spacing:2px;margin:8px 0">FOLIO: ${esc(v.folio)}</p>
     <span class="tag ${v.entregado?'warn':vig?'ok':'bad'}">${v.entregado?'✅ ENTREGADO '+new Date(v.entF).toLocaleDateString('es-MX'):vig?'VIGENTE hasta '+new Date(v.exp).toLocaleDateString('es-MX'):'EXPIRADO'}</span>
     <p style="font-size:13px;margin:10px 0">Recógelo en:<br><b>${OFICINA}</b></p>
   </div>
@@ -967,7 +1046,7 @@ function entregaVale(id){
     <div style="font-size:80px">✅</div>
     <h2 class="sec" style="text-align:center">ÁRBOL ENTREGADO</h2>
     <p style="font-size:24px;font-weight:900">${sp.emoji} ${sp.nombre}</p>
-    <p class="dim">Folio ${v.folio}<br>${new Date().toLocaleString('es-MX')}</p>
+    <p class="dim">Folio ${esc(v.folio)}<br>${new Date().toLocaleString('es-MX')}</p>
     <div class="banner ok" style="text-align:center;margin-top:10px">¡Ahora a plantarlo y registrarlo en ➕ PLANTAR! 🌳</div>
   </div>`);
 }
@@ -996,8 +1075,10 @@ function descargarVale(id){
 }
 function visitorValeHash(){
   try{
-    const d=JSON.parse(decodeURIComponent(escape(atob(location.hash.slice(3)))));
-    const sp=SPECIES[d.es]||SPECIES.mezquite;
+    const d=leerHash();
+    d.fo=txt(d.fo,12).toUpperCase(); d.p=txt(d.p,20); d.ex=num(d.ex);
+    if(!FOLIO_OK.test(d.fo) || !(d.es in SPECIES)){ location.hash=''; toast('🚫 Ese vale no es válido'); if(!S.player) onboarding(); return; }
+    const sp=SPECIES[d.es];
     const vig=Date.now()<=d.ex;
     const yaEnt=S.vivero && S.vivero.entregas.some(e=>e.folio===d.fo);
     openModal(`<div class="center">
@@ -1006,7 +1087,7 @@ function visitorValeHash(){
       <p style="font-size:16px;font-weight:900">1 ${sp.nombre} para ${esc(d.p)}</p>
       <span class="tag ${yaEnt?'bad':vig?'ok':'bad'}">${yaEnt?'⚠️ FOLIO YA ENTREGADO EN ESTE VIVERO':vig?'VIGENTE hasta '+new Date(d.ex).toLocaleDateString('es-MX'):'EXPIRADO'}</span>
     </div>
-    ${S.vivero&&!yaEnt&&vig?`<br><button class="btn full" onclick="registrarEntrega('${esc(d.fo)}','${d.es in SPECIES?d.es:'mezquite'}');location.hash='';">✅ REGISTRAR ENTREGA EN MI VIVERO</button>`:''}
+    ${S.vivero&&!yaEnt&&vig?`<br><button class="btn full" onclick="registrarEntrega('${d.fo}','${d.es}');location.hash='';">✅ REGISTRAR ENTREGA EN MI VIVERO</button>`:''}
     <div class="banner ok" style="margin-top:10px;font-size:12px">🧑‍🌾 Staff: registra el folio en MODO VIVERO (PERFIL) y pide al cliente presionar ENTREGADO en su app.</div>
     <button class="btn full ghost" onclick="location.hash='';closeModal();">CERRAR</button>`);
   }catch(e){ location.hash=''; if(!S.player) onboarding(); }
@@ -1030,7 +1111,7 @@ function vVivero(){
     <input id="entFolio" placeholder="VA-XXXXX" maxlength="10" style="text-transform:uppercase">
     <select id="entEsp">${Object.keys(SPECIES).map(k=>`<option value="${k}">${SPECIES[k].emoji} ${SPECIES[k].nombre}</option>`).join('')}</select>
     <button class="btn full" onclick="registrarEntrega()">✅ REGISTRAR ENTREGA (−1 stock)</button>
-    <p class="dim" style="font-size:11px;margin-top:10px">📦 Entregas totales: <b>${tot}</b>${tot?' · Últimas: '+S.vivero.entregas.slice(-3).reverse().map(e=>`${e.folio} (${SPECIES[e.esp]?SPECIES[e.esp].emoji:''} ${new Date(e.fecha).toLocaleDateString('es-MX')})`).join(', '):''}</p>
+    <p class="dim" style="font-size:11px;margin-top:10px">📦 Entregas totales: <b>${tot}</b>${tot?' · Últimas: '+S.vivero.entregas.slice(-3).reverse().map(e=>`${esc(e.folio)} (${SPECIES[e.esp]?SPECIES[e.esp].emoji:''} ${new Date(e.fecha).toLocaleDateString('es-MX')})`).join(', '):''}</p>
     ${tot?`<button class="btn sm ghost" onclick="exportarVivero()">💾 EXPORTAR REGISTRO DE ENTREGAS</button>`:''}`);
 }
 function stockMod(k,d){
@@ -1039,9 +1120,10 @@ function stockMod(k,d){
 }
 function registrarEntrega(folioArg, espArg){
   S.vivero=S.vivero||{stock:{}, entregas:[]};
-  const folio=(folioArg||$('#entFolio').value.trim().toUpperCase());
-  const esp=espArg||$('#entEsp').value;
+  const folio=String(folioArg||($('#entFolio')?$('#entFolio').value:'')).trim().toUpperCase();
+  const esp=espArg||($('#entEsp')?$('#entEsp').value:'');
   if(!folio){ toast('⚠️ Escribe el folio del vale'); return; }
+  if(!FOLIO_OK.test(folio) || !(esp in SPECIES)){ toast('🚫 Folio no válido — debe verse como VA-XXXXX'); return; }
   if(S.vivero.entregas.some(e=>e.folio===folio)){ toast('🚫 ¡Ese folio YA fue entregado! Revisa con el cliente.'); return; }
   if((S.vivero.stock[esp]||0)<1){ toast(`⚠️ Sin stock de ${SPECIES[esp].nombre} — pide más al campo`); return; }
   S.vivero.stock[esp]--;
@@ -1240,9 +1322,10 @@ function compartirMono(){
 }
 function visitorMonoHash(){
   try{
-    const d=JSON.parse(decodeURIComponent(escape(atob(location.hash.slice(3)))));
-    const lv=levelOf(d.xp||0);
-    const fake={name:d.p, avatar:d.av||'🦌', gear:d.g||{}, xp:d.xp||0, petActivo:d.pe||null};
+    const d=leerHash();
+    d.p=txt(d.p,20); d.av=txt(d.av,8); d.xp=Math.max(0,num(d.xp)); d.sk=Math.max(0,num(d.sk)); d.a=Math.max(0,num(d.a)); d.c=Math.max(0,num(d.c));
+    const lv=levelOf(d.xp);
+    const fake={name:d.p, avatar:d.av||'🦌', gear:(d.g&&typeof d.g==='object')?d.g:{}, xp:d.xp, petActivo:(d.pe in MASCOTAS)?d.pe:null};
     let comp='';
     if(S.player){
       const miLv=levelOf(S.player.xp), gano=(S.player.strk||0)>=(d.sk||0);
@@ -1250,7 +1333,7 @@ function visitorMonoHash(){
     }
     openModal(`<div class="center">
       ${monoSVG(fake,'hyped')}
-      <h2 class="sec" style="text-align:center">${esc(d.p||'???').toUpperCase()} ${d.av||''}</h2>
+      <h2 class="sec" style="text-align:center">${esc(d.p||'???').toUpperCase()} ${esc(d.av)}</h2>
       <div class="dim">${LEVELS[lv].e} ${LEVELS[lv].t} · Nivel ${lv+1}</div>
     </div>
     <div class="grid3" style="margin:12px 0">
@@ -1401,10 +1484,10 @@ function estadoCupon(c){
 function verCupon(id){
   const c=S.player.cupones.find(x=>x.id===id), st=estadoCupon(c);
   openModal(`<div class="center">
-    <div style="font-size:64px">${c.e}</div>
-    <h2 class="sec" style="text-align:center">${c.premio.toUpperCase()}</h2>
-    <div class="dim">${c.lugar}</div>
-    <p style="margin:10px 0;font-size:20px;font-weight:900;letter-spacing:2px">FOLIO: ${c.folio}</p>
+    <div style="font-size:64px">${esc(c.e)}</div>
+    <h2 class="sec" style="text-align:center">${esc(c.premio).toUpperCase()}</h2>
+    <div class="dim">${esc(c.lugar)}</div>
+    <p style="margin:10px 0;font-size:20px;font-weight:900;letter-spacing:2px">FOLIO: ${esc(c.folio)}</p>
     <span class="tag ${st.cl==='ok'?'ok':st.cl==='bad'?'bad':'warn'}">${st.t}</span>
   </div>
   <p style="font-size:12px;margin:12px 0" class="dim">⚠️ Vale UNA sola vez. Canjéalo únicamente frente al vendedor: él ve cómo lo marcas usado en tu pantalla.</p>
@@ -1419,8 +1502,8 @@ function canjearCupon(id){
   openModal(`<div class="center">
     <div style="font-size:80px">✅</div>
     <h2 class="sec" style="text-align:center">CANJEADO</h2>
-    <p style="font-size:26px;font-weight:900">${c.e} ${c.premio}</p>
-    <p class="dim">Folio ${c.folio}<br>${new Date().toLocaleString('es-MX')}</p>
+    <p style="font-size:26px;font-weight:900">${esc(c.e)} ${esc(c.premio)}</p>
+    <p class="dim">Folio ${esc(c.folio)}<br>${new Date().toLocaleString('es-MX')}</p>
     <div class="banner ok" style="text-align:center;margin-top:10px">Muestre esta pantalla al vendedor 🤝<br>¡Buen provecho, héroe verde! 🌳</div>
   </div>`);
 }
@@ -1448,10 +1531,11 @@ function descargarCupon(id){
 }
 function visitorCuponHash(){
   try{
-    const d=JSON.parse(decodeURIComponent(escape(atob(location.hash.slice(3)))));
+    const d=leerHash();
+    d.ex=num(d.ex); d.e=txt(d.e,8); d.pr=txt(d.pr,60); d.lu=txt(d.lu,60); d.p=txt(d.p,20); d.fo=txt(d.fo,12);
     const vigente=Date.now()<=d.ex;
     openModal(`<div class="center">
-      <div style="font-size:60px">${d.e}</div>
+      <div style="font-size:60px">${esc(d.e)}</div>
       <h2 class="sec" style="text-align:center">CUPÓN <span>ÁRBOL GO</span></h2>
       <p style="font-size:18px;font-weight:900">${esc(d.pr)}</p>
       <div class="dim">${esc(d.lu)} · ganado por ${esc(d.p)}</div>
@@ -1469,7 +1553,7 @@ function vTienda(){
   <div class="banner ok">🍃 Tienes <b>${S.player.hojas} hojas</b>. Se ganan plantando, regando a tiempo y haciendo check-ins.</div>
   <div class="card shop-item"><div class="e">🎁</div><div style="flex:1"><b>Cofre Callejero</b><div class="dim">Sorpresa: XP, hojas, créditos de árbol, ropa para tu mono${acts.length?' ¡y cupones de comida real! 🌮':''}</div>${acts.length?'':'<div class="dim" style="font-size:10px">🔜 Premios de tacos, hot dogs y café se activan con los locales aliados</div>'}</div>
     <div class="center"><div class="price">${COFRE_PRECIO} 🍃</div><button class="btn sm" style="background:var(--yellow);color:#111" ${S.player.hojas<COFRE_PRECIO?'disabled':''} onclick="abrirCofre()">ABRIR</button></div></div>
-  ${(S.player.cupones&&S.player.cupones.length)?`<h2 class="sec" style="font-size:15px;margin-top:14px">MIS <span>CUPONES</span> 🎫</h2>`+S.player.cupones.slice().reverse().map(c=>{const st=estadoCupon(c);return `<div class="card shop-item"><div class="e">${c.e}</div><div style="flex:1"><b>${c.premio}</b><div class="dim">${c.lugar} · Folio ${c.folio}</div><span class="tag ${st.cl==='ok'?'ok':st.cl==='bad'?'bad':'warn'}" style="margin-top:2px">${st.t}</span></div><button class="btn sm ghost" onclick="verCupon(${c.id})">VER</button></div>`;}).join(''):''}
+  ${(S.player.cupones&&S.player.cupones.length)?`<h2 class="sec" style="font-size:15px;margin-top:14px">MIS <span>CUPONES</span> 🎫</h2>`+S.player.cupones.slice().reverse().map(c=>{const st=estadoCupon(c);return `<div class="card shop-item"><div class="e">${esc(c.e)}</div><div style="flex:1"><b>${esc(c.premio)}</b><div class="dim">${esc(c.lugar)} · Folio ${esc(c.folio)}</div><span class="tag ${st.cl==='ok'?'ok':st.cl==='bad'?'bad':'warn'}" style="margin-top:2px">${st.t}</span></div><button class="btn sm ghost" onclick="verCupon(${c.id})">VER</button></div>`;}).join(''):''}
   <div class="card shop-item"><div class="e">🎟️</div><div style="flex:1"><b>Crédito de árbol</b><div class="dim">Un árbol nuevo para plantar donde quieras</div></div>
     <div class="center"><div class="price">${PRECIO_ARBOL} 🍃</div><button class="btn sm" ${S.player.hojas<PRECIO_ARBOL?'disabled':''} onclick="comprarCredito()">CANJEAR</button></div></div>
   <h2 class="sec" style="font-size:15px;margin-top:18px">DESBLOQUEA <span>ESPECIES PRO</span></h2>`;
@@ -1528,12 +1612,19 @@ function exportar(){
 }
 function importar(inp){
   const r=new FileReader();
-  r.onload=e=>{ try{
-    S=JSON.parse(e.target.result);
-    if(S.player){ initGear(S.player); S.trees.forEach(t=>{ if(!S.player.totems.includes(t.especie)) S.player.totems.push(t.especie); }); }
+  r.onload=e=>{
+    let nuevo=null;
+    try{ nuevo=sanearEstado(JSON.parse(e.target.result)); }catch(x){ nuevo=null; }
+    // Sin jugador y árboles no es un registro de partida (p. ej. el archivo del Modo Vivero): no se toca nada
+    if(!nuevo){ toast('⚠️ Ese archivo no es un registro de jugador de ÁRBOL GO — tu partida sigue intacta'); return; }
+    if(S.player && !confirm(`Vas a reemplazar la partida de "${S.player.name}" (${S.trees.length} árboles) por la de "${nuevo.player.name}" (${nuevo.trees.length} árboles).\n\nEsto no se puede deshacer. ¿Continuar?`)) return;
+    S=nuevo;
+    initGear(S.player);
+    S.trees.forEach(t=>{ if(!S.player.totems.includes(t.especie)) S.player.totems.push(t.especie); });
     save(); toast('📂 Registro importado'); render();
-  }catch(x){ toast('⚠️ Archivo inválido'); } };
-  r.readAsText(inp.files[0]);
+  };
+  if(inp.files && inp.files[0]) r.readAsText(inp.files[0]);
+  if('value' in inp) inp.value='';
 }
 
 /* ================= MI MONO ================= */
@@ -1602,7 +1693,7 @@ function monoSVG(pl, forceMood){
   s+=`<rect x="68" y="118" width="64" height="64" rx="16" fill="${hood}"/>
       <rect x="54" y="124" width="15" height="42" rx="7" fill="${hood}"/>
       <rect x="131" y="124" width="15" height="42" rx="7" fill="${hood}"/>
-      <text x="100" y="156" font-size="22" text-anchor="middle">${p.avatar}</text>`;
+      <text x="100" y="156" font-size="22" text-anchor="middle">${esc(p.avatar)}</text>`;
   // Cabeza
   s+=`<circle cx="100" cy="86" r="31" fill="#e8b98a"/>`;
   // Cara según ánimo
@@ -1795,9 +1886,13 @@ else if(location.hash.startsWith('#c=')) visitorCuponHash();
 else if(location.hash.startsWith('#v=')) visitorValeHash();
 else if(!S.player) onboarding();
 // Refrescar alertas y cuentas regresivas si la pestaña queda abierta
-setInterval(()=>{
-  if(S.player && (TAB==='arboles'||TAB==='mono') && !$('#modal').classList.contains('open')) render();
-}, 180000);
+function refrescar(){
+  if(!S.player) return;
+  cambioDeDia(); save();
+  if((TAB==='arboles'||TAB==='mono') && !$('#modal').classList.contains('open') && !RUN) render(); else renderChip();
+}
+setInterval(refrescar, 180000);
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) refrescar(); });
 // PWA: instalar service worker (solo en web, no en archivo local)
 if('serviceWorker' in navigator && location.protocol.indexOf('http')===0){
   navigator.serviceWorker.register('sw.js').catch(()=>{});

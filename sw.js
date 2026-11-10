@@ -1,4 +1,4 @@
-const CACHE = 'arbolgo-v1';
+const CACHE = 'arbolgo-v2';
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(['./'])).then(() => self.skipWaiting()));
@@ -19,8 +19,8 @@ self.addEventListener('fetch', e => {
   if (req.mode === 'navigate') {
     e.respondWith(
       fetch(req).then(r => {
-        const cp = r.clone();
-        caches.open(CACHE).then(c => c.put('./', cp));
+        // Solo una respuesta buena reemplaza la copia sin conexión (un 404/500 no debe pisarla)
+        if (r.ok) { const cp = r.clone(); caches.open(CACHE).then(c => c.put('./', cp)); }
         return r;
       }).catch(() => caches.match('./'))
     );
