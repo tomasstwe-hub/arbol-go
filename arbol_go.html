@@ -379,7 +379,19 @@ const esc = s=>String(s==null?'':s).replace(/[<>&"']/g,c=>({'<':'&lt;','>':'&gt;
 const num = (x,def)=>{ const n=Number(x); return Number.isFinite(n)?n:(def||0); };
 const txt = (x,max)=>String(x==null?'':x).slice(0,max||60);
 const FOLIO_OK = /^[A-Z0-9-]{3,12}$/;
-function leerHash(){ return JSON.parse(decodeURIComponent(escape(atob(location.hash.slice(3))))); }
+// Las ligas se generan en base64 "seguro para URL" (sin + / =), porque WhatsApp y otras apps alteran esos caracteres.
+function b64url(obj){ return btoa(unescape(encodeURIComponent(JSON.stringify(obj)))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); }
+// Lee la liga con la que se abrió el juego. Acepta el formato nuevo, el viejo (placas ya impresas) y ligas maltratadas por la app de mensajes.
+// Devuelve null si no hay liga, {tipo, datos} si se pudo leer, o {tipo, roto:true} si llegó dañada.
+function rutaHash(){
+  let h=location.hash||''; if(h.length<3) return null;
+  try{ h=decodeURIComponent(h); }catch(e){}
+  const m=h.match(/^#([amtcv])=([\s\S]+)$/); if(!m) return null;
+  const b=m[2].replace(/ /g,'+').replace(/-/g,'+').replace(/_/g,'/').replace(/[^A-Za-z0-9+/]/g,'');
+  try{ const datos=JSON.parse(decodeURIComponent(escape(atob(b)))); if(!datos || typeof datos!=='object') throw 0; return {tipo:m[1], datos}; }
+  catch(e){ return {tipo:m[1], roto:true}; }
+}
+function leerHash(){ const r=rutaHash(); if(!r || r.roto) throw new Error('liga dañada'); return r.datos; }
 function sanearRonda(ro, fallbackNombre, fallbackInicio){
   if(!ro || !Array.isArray(ro.g)) return {g:[txt(fallbackNombre,20)||'Guardián'], i:num(fallbackInicio,Date.now()), av:{}};
   const g=ro.g.slice(0,12).map(n=>txt(n,20)).filter(Boolean);
@@ -832,7 +844,7 @@ function usarTotem(k){
 /* ================= PLACA QR ================= */
 function qrPayload(t){
   const d={n:t.nombre,e:t.especie,f:t.fecha,la:+t.lat.toFixed(5),lo:+t.lng.toFixed(5),p:S.player.name,av:S.player.avatar,ro:t.ronda||null};
-  return PUB+'#a='+btoa(unescape(encodeURIComponent(JSON.stringify(d))));
+  return PUB+'#a='+b64url(d);
 }
 function drawPlaca(t){
   const sp=SPECIES[t.especie], url=qrPayload(t);
@@ -921,7 +933,7 @@ function visitorHash(){
 /* ================= RONDAS DE CUIDADO ================= */
 function arbolShareURL(t){
   const d={id:t.id, n:t.nombre, e:t.especie, f:t.fecha, la:+t.lat.toFixed(5), lo:+t.lng.toFixed(5), p:S.player.name, ro:t.ronda||null, tx:t.teamXP||0};
-  return PUB+'#t='+btoa(unescape(encodeURIComponent(JSON.stringify(d))));
+  return PUB+'#t='+b64url(d);
 }
 function rondaModal(id){
   const t=S.trees.find(x=>x.id===id);
@@ -1053,7 +1065,7 @@ function entregaVale(id){
 function descargarVale(id){
   const v=S.player.vales.find(x=>x.id===id), sp=SPECIES[v.especie];
   if(typeof QRious==='undefined'){ toast('🛜 Necesitas internet para el QR'); return; }
-  const data=PUB+'#v='+btoa(unescape(encodeURIComponent(JSON.stringify({fo:v.folio,es:v.especie,p:S.player.name,ex:v.exp}))));
+  const data=PUB+'#v='+b64url({fo:v.folio,es:v.especie,p:S.player.name,ex:v.exp});
   const cv=document.createElement('canvas'); cv.width=640; cv.height=880;
   const x=cv.getContext('2d');
   x.fillStyle='#fff'; x.fillRect(0,0,640,880);
@@ -1309,7 +1321,7 @@ function monoShareURL(){
   const p=S.player;
   const d={p:p.name, av:p.avatar, xp:p.xp, sk:p.strk||0, g:p.gear, a:S.trees.length, pe:p.petActivo||null,
     r:S.trees.reduce((x,t)=>x+t.riegos.length,0), c:+S.trees.reduce((x,t)=>x+co2Of(t),0).toFixed(1)};
-  return PUB+'#m='+btoa(unescape(encodeURIComponent(JSON.stringify(d))));
+  return PUB+'#m='+b64url(d);
 }
 function compartirMono(){
   const url=monoShareURL(), p=S.player, lv=levelOf(p.xp);
@@ -1510,7 +1522,7 @@ function canjearCupon(id){
 function descargarCupon(id){
   const c=S.player.cupones.find(x=>x.id===id);
   if(typeof QRious==='undefined'){ toast('🛜 Necesitas internet para el QR'); return; }
-  const data=PUB+'#c='+btoa(unescape(encodeURIComponent(JSON.stringify({e:c.e,pr:c.premio,lu:c.lugar,fo:c.folio,ex:c.exp,p:S.player.name}))));
+  const data=PUB+'#c='+b64url({e:c.e,pr:c.premio,lu:c.lugar,fo:c.folio,ex:c.exp,p:S.player.name});
   const cv=document.createElement('canvas'); cv.width=640; cv.height=880;
   const x=cv.getContext('2d');
   x.fillStyle='#fff'; x.fillRect(0,0,640,880);
@@ -1871,20 +1883,33 @@ function startGame(){
     if(!STORAGE_OK) setTimeout(()=>alert('⚠️ Este navegador no deja guardar el progreso.\n\nAbre el archivo con Chrome o Safari (no en la vista previa de WhatsApp/Archivos) para que tus árboles se guarden.'),800);
     TAB='plantar'; render();
     // Si llegó por invitación de ronda, retomarla ya con jugador creado
-    if(location.hash.startsWith('#t=')) setTimeout(visitorTreeHash, 600);
+    if((rutaHash()||{}).tipo==='t') setTimeout(visitorTreeHash, 600);
   }catch(err){
     alert('⚠️ Error al iniciar: '+err.message+'\n\nIntenta abrir el archivo con Chrome o Safari.');
   }
 }
 
 /* ================= INIT ================= */
+// Atiende la liga con la que se abrió el juego (placa, mono, ronda, cupón o vale). Devuelve true si había una.
+function atenderLiga(){
+  const ruta=rutaHash();
+  if(!ruta || RUN) return false;
+  if(ruta.roto){
+    location.hash='';
+    const que={a:'la ficha del árbol',m:'la carta del mono',t:'la invitación a la ronda',c:'el cupón',v:'el vale'}[ruta.tipo];
+    openModal(`<div class="center"><div style="font-size:52px">🔗</div>
+      <h2 class="sec" style="text-align:center">LA LIGA LLEGÓ <span>INCOMPLETA</span></h2>
+      <p style="font-size:14px;margin:10px 0">No pude leer ${que}. Casi siempre es porque la liga se cortó al copiarla o reenviarla.</p>
+      <p class="dim" style="font-size:12px">Pídele a quien te la mandó que te la envíe otra vez desde el botón de WhatsApp del juego, sin editar el mensaje.</p></div>`);
+    return true;
+  }
+  ({a:visitorHash, m:visitorMonoHash, t:visitorTreeHash, c:visitorCuponHash, v:visitorValeHash})[ruta.tipo]();
+  return true;
+}
 if(S.player) render();
-if(location.hash.startsWith('#a=')) visitorHash();
-else if(location.hash.startsWith('#m=')) visitorMonoHash();
-else if(location.hash.startsWith('#t=')) visitorTreeHash();
-else if(location.hash.startsWith('#c=')) visitorCuponHash();
-else if(location.hash.startsWith('#v=')) visitorValeHash();
-else if(!S.player) onboarding();
+if(!atenderLiga() && !S.player) onboarding();
+// Si el juego ya estaba abierto (o instalado) y tocan una liga nueva, la página no se recarga: solo cambia la liga
+window.addEventListener('hashchange', atenderLiga);
 // Refrescar alertas y cuentas regresivas si la pestaña queda abierta
 function refrescar(){
   if(!S.player) return;
